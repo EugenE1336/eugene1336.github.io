@@ -186,9 +186,11 @@ public final class HeroHud {
 			context.drawTextWithShadow(mc.textRenderer, rs, sw / 2 - tw / 2, sh / 2 - 40, 0xFFFF4444);
 		}
 
-		int baseY = sh - 66;
+		// Left of hotbar — chat sits bottom-left upward; keep skills clear of message stream
 		int totalW = 4 * 48 + 3 * 4;
-		int startX = sw / 2 - totalW / 2;
+		int hotbarLeft = sw / 2 - 91;
+		int startX = Math.max(8, hotbarLeft - totalW - 10);
+		int baseY = sh - 66;
 
 		String nameLine = hero.name() + (attackCd > 0 ? "  ATK " + ((attackCd + 19) / 20) + "с" : "");
 		context.drawTextWithShadow(mc.textRenderer,
@@ -248,8 +250,7 @@ public final class HeroHud {
 			String k2 = ClientNetworking.abilityKeyLabel(2);
 			String k3 = ClientNetworking.abilityKeyLabel(3);
 			String hint = "Ctrl+" + k0 + "/" + k1 + "/" + k2 + "/" + k3 + " — апгрейд";
-			int tw = mc.textRenderer.getWidth(hint);
-			context.drawTextWithShadow(mc.textRenderer, hint, sw / 2 - tw / 2, baseY - 24, 0xFFFFFF55);
+			context.drawTextWithShadow(mc.textRenderer, hint, startX, baseY - 24, 0xFFFFFF55);
 		}
 	}
 }
