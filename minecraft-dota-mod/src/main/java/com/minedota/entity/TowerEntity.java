@@ -303,13 +303,17 @@ public class TowerEntity extends IronGolemEntity implements TeamComponent.TeamHo
 
 	@Override
 	public boolean isCollidable() {
-		// Creeps path through footprint instead of wedging inside
-		return false;
+		return true;
 	}
 
 	@Override
 	public boolean collidesWith(Entity other) {
-		return false;
+		// Allies (creeps/heroes) pass through; enemies are blocked
+		DotaTeam otherTeam = TeamComponent.getTeam(other);
+		if (team == DotaTeam.NONE || otherTeam == DotaTeam.NONE) {
+			return false;
+		}
+		return otherTeam == team.opposite();
 	}
 
 	@Override

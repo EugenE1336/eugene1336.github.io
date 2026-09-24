@@ -1,5 +1,7 @@
 package com.minedota.entity;
 
+import com.minedota.team.DotaTeam;
+import com.minedota.team.TeamComponent;
 import net.minecraft.block.BlockState;
 import net.minecraft.entity.mob.PathAwareEntity;
 import net.minecraft.util.math.BlockPos;
@@ -62,16 +64,32 @@ public final class CreepStuckAssist {
 		}
 	}
 
-	/** Nudge off towers / barracks / ancients within ~3 blocks when stuck. */
+	/** Nudge off enemy towers / barracks / ancients within ~3 blocks when stuck. Allies are pass-through. */
 	private static void pushClearOfNearbySolids(PathAwareEntity creep) {
+		DotaTeam creepTeam = TeamComponent.getTeam(creep);
 		Box box = creep.getBoundingBox().expand(3.0);
 		for (TowerEntity t : creep.getWorld().getEntitiesByClass(TowerEntity.class, box, e -> true)) {
+			DotaTeam tt = TeamComponent.getTeam(t);
+			if (creepTeam != DotaTeam.NONE && tt == creepTeam) {
+				continue;
+			}
+			if (creepTeam != DotaTeam.NONE && tt != creepTeam.opposite()) {
+				continue;
+			}
 			pushAwayFrom(creep, t.getX(), t.getZ(), 2.8);
 		}
 		for (BarrackEntity b : creep.getWorld().getEntitiesByClass(BarrackEntity.class, box, e -> true)) {
+			DotaTeam bt = TeamComponent.getTeam(b);
+			if (creepTeam != DotaTeam.NONE && bt == creepTeam) {
+				continue;
+			}
 			pushAwayFrom(creep, b.getX(), b.getZ(), 2.8);
 		}
 		for (AncientEntity a : creep.getWorld().getEntitiesByClass(AncientEntity.class, box, e -> true)) {
+			DotaTeam at = TeamComponent.getTeam(a);
+			if (creepTeam != DotaTeam.NONE && at == creepTeam) {
+				continue;
+			}
 			pushAwayFrom(creep, a.getX(), a.getZ(), 3.2);
 		}
 	}

@@ -171,11 +171,21 @@ public class CreepEntity extends ZombieEntity implements TeamComponent.TeamHolde
 			refreshNameplate();
 		}
 		retargetPreferUnits();
-		// Unstick: allied towers + locked enemy towers (can't damage → walk around)
+		// Locked enemy towers: retarget; solid collision blocks path into enemy towers
 		Box box = this.getBoundingBox().expand(1.2);
 		for (TowerEntity tower : this.getWorld().getEntitiesByClass(TowerEntity.class, box, this::isEnemy)) {
 			if (tower.isInvulnerableToAttack()) {
-				CreepStuckAssist.pushAwayFrom(this, tower.getX(), tower.getZ(), 2.4);
+				if (this.getTarget() == null || this.getTarget() == tower
+						|| this.getTarget() instanceof TowerEntity || this.getTarget() instanceof AncientEntity
+						|| this.getTarget() instanceof BarrackEntity) {
+					LivingEntity unit = findNearbyEnemyUnit(10.0);
+					if (unit != null) {
+						this.setTarget(unit);
+					} else {
+						LivingEntity structure = findPreferredEnemyStructure(12.0);
+						this.setTarget(structure != null ? structure : null);
+					}
+				}
 				continue;
 			}
 			if (this.getTarget() == null || this.getTarget() == tower
@@ -189,10 +199,6 @@ public class CreepEntity extends ZombieEntity implements TeamComponent.TeamHolde
 					this.setTarget(structure != null ? structure : tower);
 				}
 			}
-		}
-		for (TowerEntity tower : this.getWorld().getEntitiesByClass(TowerEntity.class, box,
-				t -> TeamComponent.getTeam(t) == team)) {
-			CreepStuckAssist.pushAwayFrom(this, tower.getX(), tower.getZ(), 2.2);
 		}
 		for (BarrackEntity b : this.getWorld().getEntitiesByClass(BarrackEntity.class, box,
 				ent -> isEnemy(ent) && ent.isInvulnerableToAttack())) {
@@ -511,13 +517,6 @@ public class CreepEntity extends ZombieEntity implements TeamComponent.TeamHolde
 			if (wp == null) {
 				return;
 			}
-			while (wp != null && nearAlliedTower(wp) && creep.pathIndex < creep.path.size() - 1) {
-				creep.advancePath();
-				wp = creep.currentWaypoint();
-			}
-			if (wp == null) {
-				return;
-			}
 			double dist = creep.squaredDistXZ(wp);
 			if (dist < 4.0) {
 				creep.advancePath();
@@ -536,12 +535,6 @@ public class CreepEntity extends ZombieEntity implements TeamComponent.TeamHolde
 		/** Stop path only for attackable structures — skip locked T4 if Ancient is open. */
 		private boolean nearBlockingEnemyTower() {
 			return creep.findPreferredEnemyStructure(8.0) != null;
-		}
-
-		private boolean nearAlliedTower(BlockPos wp) {
-			Box box = new Box(wp).expand(3.5);
-			return !creep.getWorld().getEntitiesByClass(TowerEntity.class, box,
-					t -> TeamComponent.getTeam(t) == creep.getDotaTeam()).isEmpty();
 		}
 	}
 }
