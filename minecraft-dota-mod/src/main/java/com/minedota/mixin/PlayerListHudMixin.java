@@ -12,10 +12,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(PlayerListHud.class)
 public abstract class PlayerListHudMixin {
-	@Inject(method = "render", at = @At("HEAD"), cancellable = true)
-	private void minedota$matchTab(DrawContext context, int scaledWidth, Scoreboard scoreboard,
+	@Inject(method = "render", at = @At("HEAD"), cancellable = true, require = 0)
+	private void minedota$hideVanillaTab(DrawContext context, int scaledWidth, Scoreboard scoreboard,
 			ScoreboardObjective objective, CallbackInfo ci) {
-		if (ClientMatchTab.render(context, scaledWidth)) {
+		if (ClientMatchTab.shouldReplaceVanilla()) {
 			ci.cancel();
 		}
 	}

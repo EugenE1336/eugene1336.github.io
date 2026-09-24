@@ -112,15 +112,15 @@ public final class ClientNetworking {
 			int n = buf.readVarInt();
 			java.util.List<com.minedota.match.MatchTabRow> rows = new java.util.ArrayList<>();
 			for (int i = 0; i < n; i++) {
-				String team = buf.readString();
+				String team = buf.readString(32);
 				int resp = buf.readVarInt();
-				String name = buf.readString();
-				String hero = buf.readString();
+				String name = buf.readString(64);
+				String hero = buf.readString(64);
 				int level = buf.readVarInt();
 				int k = buf.readVarInt();
 				int d = buf.readVarInt();
 				int a = buf.readVarInt();
-				String items = buf.readString();
+				String items = buf.readString(64);
 				rows.add(new com.minedota.match.MatchTabRow(team, resp, name, hero, level, k, d, a, items));
 			}
 			client.execute(() -> ClientMatchTab.setRows(rows, inGame));

@@ -196,26 +196,32 @@ public final class ModNetworking {
 	}
 
 	public static void sendMatchTabToAll(MinecraftServer server, java.util.List<MatchTabRow> rows, boolean inGame) {
-		PacketByteBuf buf = writeMatchTab(rows, inGame);
 		for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
-			ServerPlayNetworking.send(p, SYNC_MATCH_TAB, new PacketByteBuf(buf.copy()));
+			ServerPlayNetworking.send(p, SYNC_MATCH_TAB, writeMatchTab(rows, inGame));
 		}
+	}
+
+	public static void sendMatchTab(ServerPlayerEntity player, java.util.List<MatchTabRow> rows, boolean inGame) {
+		ServerPlayNetworking.send(player, SYNC_MATCH_TAB, writeMatchTab(rows, inGame));
 	}
 
 	private static PacketByteBuf writeMatchTab(java.util.List<MatchTabRow> rows, boolean inGame) {
 		PacketByteBuf buf = PacketByteBufs.create();
 		buf.writeBoolean(inGame);
-		buf.writeVarInt(rows.size());
-		for (MatchTabRow r : rows) {
-			buf.writeString(r.teamId);
-			buf.writeVarInt(r.respawnSec);
-			buf.writeString(r.name);
-			buf.writeString(r.heroName);
-			buf.writeVarInt(r.level);
-			buf.writeVarInt(r.kills);
-			buf.writeVarInt(r.deaths);
-			buf.writeVarInt(r.assists);
-			buf.writeString(r.items);
+		int n = rows == null ? 0 : rows.size();
+		buf.writeVarInt(n);
+		if (rows != null) {
+			for (MatchTabRow r : rows) {
+				buf.writeString(r.teamId == null ? "none" : r.teamId, 32);
+				buf.writeVarInt(r.respawnSec);
+				buf.writeString(r.name == null ? "?" : r.name, 64);
+				buf.writeString(r.heroName == null ? "?" : r.heroName, 64);
+				buf.writeVarInt(r.level);
+				buf.writeVarInt(r.kills);
+				buf.writeVarInt(r.deaths);
+				buf.writeVarInt(r.assists);
+				buf.writeString(r.items == null ? "—" : r.items, 64);
+			}
 		}
 		return buf;
 	}

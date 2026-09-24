@@ -479,6 +479,7 @@ public final class MatchManager {
 						+ radiant + " vs Dire " + dire)
 				.formatted(Formatting.GOLD, Formatting.BOLD));
 		syncPhase(server);
+		syncMatchTab(server);
 		heroes.broadcastPicks(server);
 	}
 
@@ -807,7 +808,6 @@ public final class MatchManager {
 	private List<MatchTabRow> buildMatchTabRows(MinecraftServer server) {
 		List<MatchTabRow> rows = new ArrayList<>();
 		HeroManager hm = HeroManager.get(server);
-		ServerWorld world = server.getOverworld();
 
 		for (var e : players.entrySet()) {
 			DotaTeam team = e.getValue();
@@ -839,8 +839,13 @@ public final class MatchManager {
 					pending.level, pending.kills, pending.deaths, pending.assists, "—"));
 		}
 
-		if (world != null && layout != null) {
-			Box box = new Box(layout.center()).expand(DotaMap.HALF + 16, 24, DotaMap.HALF + 16);
+		for (ServerWorld world : server.getWorlds()) {
+			if (!ModWorldgen.isDotaWorld(world) && world != server.getOverworld()) {
+				continue;
+			}
+			Box box = layout != null
+					? new Box(layout.center()).expand(DotaMap.HALF + 16, 24, DotaMap.HALF + 16)
+					: new Box(-DotaMap.HALF, 0, -DotaMap.HALF, DotaMap.HALF, 128, DotaMap.HALF);
 			for (BotHeroEntity bot : world.getEntitiesByClass(BotHeroEntity.class, box, BotHeroEntity::isAlive)) {
 				if (deadBotNums.contains(bot.getBotNumber())) {
 					continue;
@@ -1075,6 +1080,7 @@ public final class MatchManager {
 				HeroManager.get(player.getServer()).applyHeroStats(player);
 				giveStarterKit(player);
 				sendPhaseTo(player);
+				syncMatchTab(player.getServer());
 				return;
 			}
 		}
