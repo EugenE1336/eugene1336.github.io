@@ -21,7 +21,7 @@ import net.minecraft.world.World;
 
 public final class ModWorldgen {
 	/** Bump when tower/barrack/ancient/base coordinates change — forces respawn. */
-	public static final int TOWER_LAYOUT_VERSION = 16;
+	public static final int TOWER_LAYOUT_VERSION = 17;
 
 	private ModWorldgen() {
 	}

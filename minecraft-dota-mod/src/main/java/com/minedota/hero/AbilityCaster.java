@@ -450,7 +450,7 @@ public final class AbilityCaster {
 			return false;
 		}
 		if (state.isOf(Blocks.DIRT_PATH) || state.isOf(Blocks.FARMLAND)
-				|| state.isOf(Blocks.PACKED_ICE) || state.isOf(Blocks.ICE) || state.isOf(Blocks.BLUE_ICE)
+				|| state.isOf(Blocks.BLUE_WOOL) || state.isOf(Blocks.PACKED_ICE) || state.isOf(Blocks.ICE) || state.isOf(Blocks.BLUE_ICE)
 				|| state.isOf(Blocks.SNOW_BLOCK) || state.isOf(Blocks.GRASS_BLOCK)
 				|| state.isOf(Blocks.DIRT) || state.isOf(Blocks.COARSE_DIRT) || state.isOf(Blocks.PODZOL)
 				|| state.isOf(Blocks.STONE) || state.isOf(Blocks.COBBLESTONE)

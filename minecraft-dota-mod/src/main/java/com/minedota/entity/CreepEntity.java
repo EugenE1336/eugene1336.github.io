@@ -146,6 +146,15 @@ public class CreepEntity extends ZombieEntity implements TeamComponent.TeamHolde
 	}
 
 	@Override
+	public boolean isPushable() {
+		return false;
+	}
+
+	@Override
+	protected void pushAway(net.minecraft.entity.Entity entity) {
+	}
+
+	@Override
 	public void tick() {
 		super.tick();
 		if (this.getWorld().isClient || !this.isAlive()) {

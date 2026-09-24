@@ -114,7 +114,7 @@ public class RangedCreepEntity extends SkeletonEntity implements TeamComponent.T
 	@Override
 	protected void initGoals() {
 		this.goalSelector.add(0, new SwimGoal(this));
-		this.goalSelector.add(2, new BowAttackGoal<>(this, 1.0, 20, 12.0f));
+		this.goalSelector.add(2, new HoldRangeBowAttackGoal<>(this, 1.0, 20, 12.0f));
 		this.goalSelector.add(5, new FollowLanePathGoal(this));
 		this.goalSelector.add(8, new LookAtEntityGoal(this, PlayerEntity.class, 8.0f));
 		this.goalSelector.add(8, new LookAroundGoal(this));
@@ -148,6 +148,15 @@ public class RangedCreepEntity extends SkeletonEntity implements TeamComponent.T
 			return;
 		}
 		super.attack(target, pullProgress);
+	}
+
+	@Override
+	public boolean isPushable() {
+		return false;
+	}
+
+	@Override
+	protected void pushAway(net.minecraft.entity.Entity entity) {
 	}
 
 	@Override

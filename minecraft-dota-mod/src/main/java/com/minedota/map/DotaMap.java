@@ -467,7 +467,7 @@ public final class DotaMap {
 				return Blocks.DIRT.getDefaultState();
 			}
 			if (y == iceY) {
-				return isRiverBank(x, z) ? Blocks.SAND.getDefaultState() : Blocks.PACKED_ICE.getDefaultState();
+				return isRiverBank(x, z) ? Blocks.SAND.getDefaultState() : Blocks.BLUE_WOOL.getDefaultState();
 			}
 			if (y > iceY) {
 				return Blocks.AIR.getDefaultState();
@@ -754,23 +754,26 @@ public final class DotaMap {
 		raiseBasePlatform(world, R_BASE_X, R_BASE_Z, true);
 		raiseBasePlatform(world, D_BASE_X, D_BASE_Z, false);
 		placeTowerPedestals(world);
-		repairRiverIce(world);
+		repairRiver(world);
 	}
 
-	/** Replace river water with packed ice (creeps no longer swim/stuck). */
-	public static void repairRiverIce(ServerWorld world) {
-		int iceY = FLOOR_Y - 1;
+	/** River surface = blue wool (was ice). Converts old ice/water on existing worlds. */
+	public static void repairRiver(ServerWorld world) {
+		int riverY = FLOOR_Y - 1;
 		for (int x = -HALF + 1; x < HALF; x++) {
 			for (int z = -HALF + 1; z < HALF; z++) {
 				if (!isRiver(x, z) || isRiverBank(x, z)) {
 					continue;
 				}
-				BlockPos pos = new BlockPos(x, iceY, z);
-				if (world.getBlockState(pos).isOf(Blocks.WATER)
-						|| world.getBlockState(pos).isOf(Blocks.ICE)
-						|| world.getBlockState(pos).isOf(Blocks.BLUE_ICE)
-						|| world.getBlockState(pos).isAir()) {
-					world.setBlockState(pos, Blocks.PACKED_ICE.getDefaultState());
+				BlockPos pos = new BlockPos(x, riverY, z);
+				BlockState st = world.getBlockState(pos);
+				if (st.isOf(Blocks.WATER)
+						|| st.isOf(Blocks.ICE)
+						|| st.isOf(Blocks.PACKED_ICE)
+						|| st.isOf(Blocks.BLUE_ICE)
+						|| st.isAir()
+						|| !st.isOf(Blocks.BLUE_WOOL)) {
+					world.setBlockState(pos, Blocks.BLUE_WOOL.getDefaultState());
 				}
 				BlockPos above = pos.up();
 				if (world.getBlockState(above).isOf(Blocks.WATER)) {
