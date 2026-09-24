@@ -122,12 +122,12 @@ public final class ClientNetworking {
 				return;
 			}
 			HeroHud.tickClientCds();
-			boolean sneak = client.player.isSneaking();
+			boolean upgrade = isCtrlDown(client);
 			for (int i = 0; i < 4; i++) {
 				while (ABILITY_KEYS[i].wasPressed()) {
 					PacketByteBuf buf = PacketByteBufs.create();
 					buf.writeVarInt(i);
-					if (sneak) {
+					if (upgrade) {
 						ClientPlayNetworking.send(ModNetworking.UPGRADE_ABILITY, buf);
 					} else {
 						ClientPlayNetworking.send(ModNetworking.CAST_ABILITY, buf);
@@ -135,5 +135,12 @@ public final class ClientNetworking {
 				}
 			}
 		});
+	}
+
+	/** Explicit Ctrl (not Mac Cmd) — upgrade abilities. */
+	private static boolean isCtrlDown(net.minecraft.client.MinecraftClient client) {
+		long handle = client.getWindow().getHandle();
+		return org.lwjgl.glfw.GLFW.glfwGetKey(handle, org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_CONTROL) == org.lwjgl.glfw.GLFW.GLFW_PRESS
+				|| org.lwjgl.glfw.GLFW.glfwGetKey(handle, org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT_CONTROL) == org.lwjgl.glfw.GLFW.GLFW_PRESS;
 	}
 }

@@ -384,7 +384,7 @@ public final class MatchManager {
 			giveStarterKit(player);
 			if (hero != null) {
 				player.sendMessage(Text.literal("Ты: ").append(Text.literal(hero.name()).formatted(hero.attribute().getColor()))
-						.append(" | Z X C V каст, Shift+ZXCV апгрейд | ЛКМ атака"), false);
+						.append(" | Z X C V каст, Ctrl+ZXCV апгрейд | ЛКМ атака"), false);
 			}
 		}
 

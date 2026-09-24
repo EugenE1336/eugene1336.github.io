@@ -247,7 +247,7 @@ public final class HeroHud {
 			String k1 = ClientNetworking.abilityKeyLabel(1);
 			String k2 = ClientNetworking.abilityKeyLabel(2);
 			String k3 = ClientNetworking.abilityKeyLabel(3);
-			String hint = "Shift+" + k0 + "/" + k1 + "/" + k2 + "/" + k3 + " — апгрейд";
+			String hint = "Ctrl+" + k0 + "/" + k1 + "/" + k2 + "/" + k3 + " — апгрейд";
 			int tw = mc.textRenderer.getWidth(hint);
 			context.drawTextWithShadow(mc.textRenderer, hint, sw / 2 - tw / 2, baseY - 24, 0xFFFFFF55);
 		}

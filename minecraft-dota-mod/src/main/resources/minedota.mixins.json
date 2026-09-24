@@ -12,7 +12,8 @@
     "PlayerEntityRendererMixin",
     "InGameHudMixin",
     "MinecraftClientAttackMixin",
-    "NoHurtCamMixin"
+    "NoHurtCamMixin",
+    "NoSneakMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -159,7 +159,7 @@ public final class HeroManager {
 			return Text.literal("Респаун…").formatted(Formatting.GRAY);
 		}
 		if (prog.getRank(slot) <= 0) {
-			return Text.literal(slot.getKey() + " не изучен (Shift+" + slot.getKey() + " — апгрейд)")
+			return Text.literal(slot.getKey() + " не изучен (Ctrl+" + slot.getKey() + " — апгрейд)")
 					.formatted(Formatting.YELLOW);
 		}
 		AbilityDef ab = def.ability(slot);

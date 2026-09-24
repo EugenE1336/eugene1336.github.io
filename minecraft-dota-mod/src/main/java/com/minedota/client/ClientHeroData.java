@@ -90,4 +90,10 @@ public final class ClientHeroData {
 	public static boolean hideVanillaHunger() {
 		return "IN_GAME".equals(phase) || "SHOP".equals(phase) || "HERO_SELECT".equals(phase);
 	}
+
+	/** No crouch in Dota sessions (Shift free; upgrade is Ctrl+ability). */
+	public static boolean disableSneak() {
+		return "LOBBY".equals(phase) || "IN_GAME".equals(phase)
+				|| "SHOP".equals(phase) || "HERO_SELECT".equals(phase);
+	}
 }
