@@ -37,15 +37,21 @@ gradlew.bat build
 
 ## Git / релизы
 
-Каждый bump `mod_version` → commit + push в `origin/main`:
+Готовый jar кладём в `releases/minedota-<version>.jar` и пушим вместе с исходниками.
+
+Каждый bump `mod_version` → сборка → copy jar → commit + push:
 
 ```bat
+gradlew.bat build
+copy /Y build\libs\minedota-X.Y.Z.jar releases\minedota-X.Y.Z.jar
 git add minecraft-dota-mod
 git commit -m "minedota: vX.Y.Z — краткое описание"
 git push origin main
 ```
 
-Не коммитить: `build/`, `.gradle/`, `.jdk/`, `run/` (см. `.gitignore`).
+Скачать: `minecraft-dota-mod/releases/minedota-0.1.32.jar`
+
+Не коммитить: `build/`, `.gradle/`, `.jdk/`, `run/` (см. `.gitignore`). `releases/*.jar` — **нужно** коммитить.
 
 ## Как играть
 
