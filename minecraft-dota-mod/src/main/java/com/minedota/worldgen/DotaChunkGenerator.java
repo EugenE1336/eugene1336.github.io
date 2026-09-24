@@ -94,6 +94,11 @@ public class DotaChunkGenerator extends ChunkGenerator {
 	public CompletableFuture<Chunk> populateNoise(Executor executor, Blender blender, NoiseConfig noiseConfig,
 			StructureAccessor structureAccessor, Chunk chunk) {
 		ChunkPos chunkPos = chunk.getPos();
+		// Far void: skip writing 16×16×128 — leave default air (huge load win)
+		if (!DotaMap.chunkTouchesGenerated(chunkPos.x, chunkPos.z)) {
+			return CompletableFuture.completedFuture(chunk);
+		}
+
 		BlockPos.Mutable mutable = new BlockPos.Mutable();
 		Heightmap ocean = chunk.getHeightmap(Heightmap.Type.OCEAN_FLOOR_WG);
 		Heightmap surface = chunk.getHeightmap(Heightmap.Type.WORLD_SURFACE_WG);
@@ -118,6 +123,9 @@ public class DotaChunkGenerator extends ChunkGenerator {
 
 	@Override
 	public int getHeight(int x, int z, Heightmap.Type heightmap, HeightLimitView world, NoiseConfig noiseConfig) {
+		if (!DotaMap.isGeneratedColumn(x, z)) {
+			return getMinimumY();
+		}
 		return DotaMap.surfaceY(x, z) + 1;
 	}
 

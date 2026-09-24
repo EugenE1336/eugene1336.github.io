@@ -18,6 +18,7 @@ public class DotaWorldState extends PersistentState {
 	private boolean entitiesSpawned;
 	private boolean lobbyReady;
 	private boolean debrisScrubbed;
+	private boolean voidOutsideScrubbed;
 	private int towerLayoutVersion;
 	private int nextMatchNumber = 1;
 	private final List<MatchRecord> matchHistory = new ArrayList<>();
@@ -34,6 +35,7 @@ public class DotaWorldState extends PersistentState {
 		state.entitiesSpawned = nbt.getBoolean("EntitiesSpawned");
 		state.lobbyReady = nbt.getBoolean("LobbyReady");
 		state.debrisScrubbed = nbt.getBoolean("DebrisScrubbed");
+		state.voidOutsideScrubbed = nbt.getBoolean("VoidOutsideScrubbed");
 		state.towerLayoutVersion = nbt.getInt("TowerLayoutV");
 		state.nextMatchNumber = Math.max(1, nbt.getInt("NextMatchN"));
 		if (nbt.contains("MatchHistory", NbtElement.LIST_TYPE)) {
@@ -50,6 +52,7 @@ public class DotaWorldState extends PersistentState {
 		nbt.putBoolean("EntitiesSpawned", entitiesSpawned);
 		nbt.putBoolean("LobbyReady", lobbyReady);
 		nbt.putBoolean("DebrisScrubbed", debrisScrubbed);
+		nbt.putBoolean("VoidOutsideScrubbed", voidOutsideScrubbed);
 		nbt.putInt("TowerLayoutV", towerLayoutVersion);
 		nbt.putInt("NextMatchN", nextMatchNumber);
 		NbtList list = new NbtList();
@@ -82,6 +85,14 @@ public class DotaWorldState extends PersistentState {
 
 	public void setDebrisScrubbed(boolean debrisScrubbed) {
 		this.debrisScrubbed = debrisScrubbed;
+	}
+
+	public boolean isVoidOutsideScrubbed() {
+		return voidOutsideScrubbed;
+	}
+
+	public void setVoidOutsideScrubbed(boolean voidOutsideScrubbed) {
+		this.voidOutsideScrubbed = voidOutsideScrubbed;
 	}
 
 	public int getTowerLayoutVersion() {

@@ -199,6 +199,7 @@ public final class MatchManager {
 		phaseTicksLeft = 0;
 		TeamComponent.ensureScoreboardTeams(world.getServer().getScoreboard());
 		applyDotaGameRules(world);
+		ModWorldgen.applyWorldBorder(world);
 		LobbySetup.refreshMatchHistory(world);
 		syncPhase(world.getServer());
 	}
@@ -226,6 +227,7 @@ public final class MatchManager {
 						&& !(e instanceof TowerEntity)
 						&& !(e instanceof BarrackEntity)
 						&& !(e instanceof AncientEntity)
+						&& !(e instanceof BotHeroEntity)
 						&& !(e instanceof net.minecraft.entity.passive.VillagerEntity)
 		).forEach(e -> e.discard());
 	}
@@ -876,23 +878,30 @@ public final class MatchManager {
 			if (heroPool.isEmpty()) {
 				break;
 			}
-			String heroId = heroPool.get(botRandom.nextInt(heroPool.size()));
+			String heroId = heroPool.remove(botRandom.nextInt(heroPool.size()));
 			BotHeroEntity bot = ModEntities.BOT_HERO.create(world);
 			if (bot == null) {
 				continue;
 			}
 			BlockPos base = botTeam == DotaTeam.RADIANT ? layout.radiantSpawn() : layout.direSpawn();
+			LaneChunkLoader.ensureLoaded(world, base);
 			int y = DotaMap.surfaceY(base.getX(), base.getZ()) + 1;
 			double ox = (i % 3) * 1.4 - 1.4;
 			double oz = (i / 3) * 1.4;
 			bot.refreshPositionAndAngles(base.getX() + 0.5 + ox, y, base.getZ() + 0.5 + oz,
 					botTeam == DotaTeam.RADIANT ? -45f : 135f, 0f);
 			bot.setup(botTeam, heroId, BotHeroEntity.midPathToEnemyT2(botTeam));
-			world.spawnEntity(bot);
+			bot.setPersistent();
+			if (!world.spawnEntity(bot)) {
+				broadcast(world.getServer(), Text.literal("Бот не заспавнился: " + heroId)
+						.formatted(Formatting.RED));
+				continue;
+			}
 			HeroDef def = HeroCatalog.get(heroId);
 			broadcast(world.getServer(), Text.literal("Бот: ")
 					.append(botTeam.getDisplayName())
-					.append(Text.literal(" — " + (def != null ? def.name() : heroId))
+					.append(Text.literal(" — " + (def != null ? def.name() : heroId)
+							+ " @ " + base.getX() + "," + base.getZ())
 							.formatted(Formatting.AQUA)));
 			i++;
 		}

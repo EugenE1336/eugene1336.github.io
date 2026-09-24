@@ -1,5 +1,6 @@
 package com.minedota.map;
 
+import com.minedota.MineDota;
 import com.minedota.entity.BarrackEntity;
 import com.minedota.lobby.LobbyMap;
 import com.minedota.team.DotaTeam;
@@ -86,6 +87,85 @@ public final class DotaMap {
 
 	public static boolean isInsidePlayable(double x, double z) {
 		return Math.abs(x) < HALF - 0.5 && Math.abs(z) < HALF - 0.5;
+	}
+
+	/** Arena wall/interior or lobby — columns that should exist in the world. */
+	public static boolean isGeneratedColumn(int x, int z) {
+		if (LobbyMap.isLobbyColumn(x, z)) {
+			return true;
+		}
+		return Math.abs(x) <= HALF && Math.abs(z) <= HALF;
+	}
+
+	/** Inclusive world AABB covering arena + lobby (for border / scrub). */
+	public static int genMinX() {
+		return -HALF;
+	}
+
+	public static int genMaxX() {
+		return HALF;
+	}
+
+	public static int genMinZ() {
+		return -HALF;
+	}
+
+	public static int genMaxZ() {
+		return Math.max(HALF, LobbyMap.CENTER_Z + LobbyMap.HALF);
+	}
+
+	/**
+	 * Strip previously generated bedrock/barrier outside the single map square.
+	 * Only touches already-loaded chunks (no force-load — that would recreate lag).
+	 */
+	public static void scrubOutsideToVoid(ServerWorld world) {
+		int padChunks = 8;
+		int minCx = (genMinX() >> 4) - padChunks;
+		int maxCx = (genMaxX() >> 4) + padChunks;
+		int minCz = (genMinZ() >> 4) - padChunks;
+		int maxCz = (genMaxZ() >> 4) + padChunks;
+		BlockPos.Mutable mut = new BlockPos.Mutable();
+		int cleared = 0;
+		for (int cx = minCx; cx <= maxCx; cx++) {
+			for (int cz = minCz; cz <= maxCz; cz++) {
+				if (!world.isChunkLoaded(cx, cz)) {
+					continue;
+				}
+				int x0 = cx << 4;
+				int z0 = cz << 4;
+				for (int lx = 0; lx < 16; lx++) {
+					for (int lz = 0; lz < 16; lz++) {
+						int x = x0 + lx;
+						int z = z0 + lz;
+						if (isGeneratedColumn(x, z)) {
+							continue;
+						}
+						for (int y = 0; y < 128; y++) {
+							mut.set(x, y, z);
+							BlockState st = world.getBlockState(mut);
+							if (!st.isAir()) {
+								world.setBlockState(mut, Blocks.AIR.getDefaultState(), 2);
+								cleared++;
+							}
+						}
+					}
+				}
+			}
+		}
+		MineDota.LOGGER.info("Scrubbed outside map to void ({} blocks in loaded chunks)", cleared);
+	}
+
+	/** True if chunk AABB overlaps arena or lobby. */
+	public static boolean chunkTouchesGenerated(int chunkX, int chunkZ) {
+		int x0 = chunkX << 4;
+		int z0 = chunkZ << 4;
+		int x1 = x0 + 15;
+		int z1 = z0 + 15;
+		if (x1 < genMinX() || x0 > genMaxX() || z1 < genMinZ() || z0 > genMaxZ()) {
+			return false;
+		}
+		// Coarse AABB hit — fine enough (void columns still cheap)
+		return true;
 	}
 
 	public static boolean isTreeBlock(BlockState state) {
@@ -437,13 +517,8 @@ public final class DotaMap {
 		boolean inside = Math.abs(x) < HALF && Math.abs(z) < HALF;
 		boolean border = Math.abs(x) == HALF || Math.abs(z) == HALF;
 
+		// Beyond the single arena square (+ lobby above): void — no infinite bedrock/barrier grid to generate
 		if (!inside && !border) {
-			if (y <= FLOOR_Y) {
-				return Blocks.BEDROCK.getDefaultState();
-			}
-			if (y <= WALL_TOP + 4) {
-				return Blocks.BARRIER.getDefaultState();
-			}
 			return Blocks.AIR.getDefaultState();
 		}
 

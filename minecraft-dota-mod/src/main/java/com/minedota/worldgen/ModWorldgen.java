@@ -66,11 +66,35 @@ public final class ModWorldgen {
 				state.markDirty();
 				MineDota.LOGGER.info("Scrubbed vanilla lava/ores from Dota map");
 			}
+			if (!state.isVoidOutsideScrubbed()) {
+				DotaMap.scrubOutsideToVoid(world);
+				state.setVoidOutsideScrubbed(true);
+				state.markDirty();
+			}
+			applyWorldBorder(world);
 			MatchManager.get(server).activateDotaWorld(world);
 			DotaMap.repairBaseGates(world);
 			world.setSpawnPos(LobbyMap.SPAWN, 180.0f);
 			MineDota.LOGGER.info("Dota 2 world loaded — lobby ready");
 		});
+	}
+
+	/** One square: arena + lobby. Stops infinite chunk generation past the map. */
+	public static void applyWorldBorder(ServerWorld world) {
+		double minX = DotaMap.genMinX();
+		double maxX = DotaMap.genMaxX();
+		double minZ = DotaMap.genMinZ();
+		double maxZ = DotaMap.genMaxZ();
+		double cx = (minX + maxX) / 2.0;
+		double cz = (minZ + maxZ) / 2.0;
+		double size = Math.max(maxX - minX, maxZ - minZ) + 4.0;
+		var border = world.getWorldBorder();
+		border.setCenter(cx, cz);
+		border.setSize(size);
+		border.setDamagePerBlock(0.0);
+		border.setSafeZone(0.0);
+		border.setWarningBlocks(2);
+		MineDota.LOGGER.info("World border set to map square center=({}, {}) size={}", cx, cz, size);
 	}
 
 	public static boolean isDotaWorld(World world) {

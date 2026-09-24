@@ -42,6 +42,7 @@ public class BotHeroEntity extends PathAwareEntity implements TeamComponent.Team
 	public BotHeroEntity(EntityType<? extends PathAwareEntity> type, World world) {
 		super(type, world);
 		this.experiencePoints = 0;
+		this.setPersistent();
 	}
 
 	public static DefaultAttributeContainer.Builder createBotAttributes() {
@@ -118,6 +119,21 @@ public class BotHeroEntity extends PathAwareEntity implements TeamComponent.Team
 			return isEnemyTower(target);
 		}
 		return isEnemy(target);
+	}
+
+	@Override
+	public boolean cannotDespawn() {
+		return true;
+	}
+
+	@Override
+	public boolean canImmediatelyDespawn(double distanceSquared) {
+		return false;
+	}
+
+	@Override
+	public boolean isFireImmune() {
+		return true;
 	}
 
 	@Override
