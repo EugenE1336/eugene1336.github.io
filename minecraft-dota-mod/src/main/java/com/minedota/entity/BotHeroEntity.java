@@ -2,6 +2,7 @@ package com.minedota.entity;
 
 import com.minedota.hero.HeroCatalog;
 import com.minedota.hero.HeroDef;
+import com.minedota.hero.ProgressionConstants;
 import com.minedota.map.DotaMap;
 import com.minedota.team.DotaTeam;
 import com.minedota.team.TeamComponent;
@@ -32,12 +33,15 @@ import java.util.List;
 
 /**
  * Simple mid-lane bot: walks mid until enemy T2, attacks creeps / towers / heroes.
+ * Levels from creep/hero kills like players (XP only — no gold economy).
  */
 public class BotHeroEntity extends PathAwareEntity implements TeamComponent.TeamHolder {
 	private DotaTeam team = DotaTeam.NONE;
 	private String heroId = "axe";
 	private final List<BlockPos> path = new ArrayList<>();
 	private int pathIndex;
+	private int level = 1;
+	private int xp;
 
 	public BotHeroEntity(EntityType<? extends PathAwareEntity> type, World world) {
 		super(type, world);
@@ -62,12 +66,9 @@ public class BotHeroEntity extends PathAwareEntity implements TeamComponent.Team
 			this.path.addAll(midPath);
 		}
 		this.pathIndex = 0;
-		HeroDef def = HeroCatalog.get(this.heroId);
-		if (def != null) {
-			this.getAttributeInstance(EntityAttributes.GENERIC_MAX_HEALTH).setBaseValue(def.maxHealth());
-			this.setHealth(def.maxHealth());
-			this.getAttributeInstance(EntityAttributes.GENERIC_ATTACK_DAMAGE).setBaseValue(def.attackDamage());
-		}
+		this.level = 1;
+		this.xp = 0;
+		applyLevelStats(true);
 		refreshName();
 	}
 
@@ -75,11 +76,80 @@ public class BotHeroEntity extends PathAwareEntity implements TeamComponent.Team
 		return heroId;
 	}
 
+	public int getHeroLevel() {
+		return level;
+	}
+
+	public int getXp() {
+		return xp;
+	}
+
+	/** Restore level/XP after fountain respawn (keeps kill progression). */
+	public void restoreProgress(int savedLevel, int savedXp) {
+		this.level = Math.max(1, Math.min(ProgressionConstants.MAX_LEVEL, savedLevel));
+		this.xp = Math.max(0, savedXp);
+		if (this.level >= ProgressionConstants.MAX_LEVEL) {
+			this.xp = 0;
+		}
+		applyLevelStats(true);
+		refreshName();
+	}
+
+	/** Same XP curve as players; returns levels gained. */
+	public int addXp(int amount) {
+		if (amount <= 0 || level >= ProgressionConstants.MAX_LEVEL) {
+			return 0;
+		}
+		int gained = 0;
+		xp += amount;
+		while (level < ProgressionConstants.MAX_LEVEL) {
+			int need = ProgressionConstants.xpToNext(level);
+			if (xp < need) {
+				break;
+			}
+			xp -= need;
+			level++;
+			gained++;
+		}
+		if (level >= ProgressionConstants.MAX_LEVEL) {
+			xp = 0;
+		}
+		if (gained > 0) {
+			applyLevelStats(false);
+			refreshName();
+		}
+		return gained;
+	}
+
+	private void applyLevelStats(boolean fullHeal) {
+		HeroDef def = HeroCatalog.get(heroId);
+		double baseHp = def != null ? def.maxHealth() : 200.0;
+		double baseAtk = def != null ? def.attackDamage() : 8.0;
+		// +2% HP / +1.5% ATK per level after 1 (rough hero growth)
+		double hp = baseHp * (1.0 + 0.02 * (level - 1));
+		double atk = baseAtk * (1.0 + 0.015 * (level - 1));
+		var hpAttr = this.getAttributeInstance(EntityAttributes.GENERIC_MAX_HEALTH);
+		var atkAttr = this.getAttributeInstance(EntityAttributes.GENERIC_ATTACK_DAMAGE);
+		float ratio = fullHeal || hpAttr == null ? 1f
+				: (float) (this.getHealth() / Math.max(1.0, hpAttr.getValue()));
+		if (hpAttr != null) {
+			hpAttr.setBaseValue(hp);
+		}
+		if (atkAttr != null) {
+			atkAttr.setBaseValue(atk);
+		}
+		if (fullHeal) {
+			this.setHealth(this.getMaxHealth());
+		} else {
+			this.setHealth(Math.min(this.getMaxHealth(), Math.max(1f, this.getMaxHealth() * ratio)));
+		}
+	}
+
 	private void refreshName() {
 		HeroDef def = HeroCatalog.get(heroId);
 		String name = def != null ? def.name() : heroId;
 		this.setCustomName(team.getDisplayName().copy()
-				.append(net.minecraft.text.Text.literal(" Bot " + name)));
+				.append(net.minecraft.text.Text.literal(" Bot " + name + " L" + level)));
 		this.setCustomNameVisible(true);
 	}
 
@@ -166,6 +236,8 @@ public class BotHeroEntity extends PathAwareEntity implements TeamComponent.Team
 		nbt.putString(TeamComponent.NBT_KEY, team.getId());
 		nbt.putString("HeroId", heroId);
 		nbt.putInt("PathIndex", pathIndex);
+		nbt.putInt("BotLevel", level);
+		nbt.putInt("BotXp", xp);
 		NbtList list = new NbtList();
 		for (BlockPos p : path) {
 			list.add(NbtLong.of(p.asLong()));
@@ -179,6 +251,8 @@ public class BotHeroEntity extends PathAwareEntity implements TeamComponent.Team
 		team = DotaTeam.fromId(nbt.getString(TeamComponent.NBT_KEY));
 		heroId = nbt.contains("HeroId") ? nbt.getString("HeroId") : "axe";
 		pathIndex = nbt.getInt("PathIndex");
+		level = Math.max(1, nbt.contains("BotLevel") ? nbt.getInt("BotLevel") : 1);
+		xp = Math.max(0, nbt.getInt("BotXp"));
 		path.clear();
 		if (nbt.contains("Path", NbtElement.LIST_TYPE)) {
 			NbtList list = nbt.getList("Path", NbtElement.LONG_TYPE);
@@ -186,6 +260,7 @@ public class BotHeroEntity extends PathAwareEntity implements TeamComponent.Team
 				path.add(BlockPos.fromLong(((NbtLong) list.get(i)).longValue()));
 			}
 		}
+		applyLevelStats(false);
 		refreshName();
 	}
 

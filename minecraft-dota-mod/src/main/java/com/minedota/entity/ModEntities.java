@@ -88,6 +88,16 @@ public final class ModEntities {
 					.trackRangeBlocks(96)
 					.build());
 
+	/** Ranged creep arrows — pass through allies. */
+	public static final EntityType<AllyPassArrowEntity> CREEP_ARROW = Registry.register(
+			Registries.ENTITY_TYPE,
+			new Identifier(MineDota.MOD_ID, "creep_arrow"),
+			FabricEntityTypeBuilder.<AllyPassArrowEntity>create(SpawnGroup.MISC, AllyPassArrowEntity::new)
+					.dimensions(EntityDimensions.fixed(0.5f, 0.5f))
+					.trackRangeBlocks(64)
+					.trackedUpdateRate(20)
+					.build());
+
 	private ModEntities() {
 	}
 
@@ -111,5 +121,6 @@ public final class ModEntities {
 		EntityRendererRegistry.register(BARRACK, IronGolemEntityRenderer::new);
 		EntityRendererRegistry.register(ANCIENT, AncientWardenRenderer::new);
 		EntityRendererRegistry.register(BOT_HERO, BotHeroRenderer::new);
+		EntityRendererRegistry.register(CREEP_ARROW, net.minecraft.client.render.entity.ArrowEntityRenderer::new);
 	}
 }

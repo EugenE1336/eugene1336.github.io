@@ -31,6 +31,7 @@ public class CreepEntity extends ZombieEntity implements TeamComponent.TeamHolde
 	private final List<BlockPos> path = new ArrayList<>();
 	private int pathIndex;
 	private boolean superCreep;
+	private final CreepStuckAssist.State stuck = new CreepStuckAssist.State();
 
 	public CreepEntity(EntityType<? extends ZombieEntity> entityType, World world) {
 		super(entityType, world);
@@ -168,10 +169,11 @@ public class CreepEntity extends ZombieEntity implements TeamComponent.TeamHolde
 			refreshNameplate();
 		}
 		retargetPreferUnits();
-		// Unstick only from ALLIED towers; enemy buildings = attackable target only
+		// Unstick: allied towers + locked enemy towers (can't damage → walk around)
 		Box box = this.getBoundingBox().expand(1.2);
 		for (TowerEntity tower : this.getWorld().getEntitiesByClass(TowerEntity.class, box, this::isEnemy)) {
 			if (tower.isInvulnerableToAttack()) {
+				CreepStuckAssist.pushAwayFrom(this, tower.getX(), tower.getZ(), 2.4);
 				continue;
 			}
 			if (this.getTarget() == null || this.getTarget() == tower
@@ -188,27 +190,31 @@ public class CreepEntity extends ZombieEntity implements TeamComponent.TeamHolde
 		}
 		for (TowerEntity tower : this.getWorld().getEntitiesByClass(TowerEntity.class, box,
 				t -> TeamComponent.getTeam(t) == team)) {
-			double dx = this.getX() - tower.getX();
-			double dz = this.getZ() - tower.getZ();
-			double len = Math.sqrt(dx * dx + dz * dz);
-			if (len < 1.6) {
-				if (len < 0.05) {
-					dx = 1;
-					dz = 0;
-					len = 1;
-				}
-				this.refreshPositionAndAngles(
-						tower.getX() + dx / len * 2.2,
-						this.getY(),
-						tower.getZ() + dz / len * 2.2,
-						this.getYaw(), this.getPitch());
-				this.getNavigation().stop();
-			}
+			CreepStuckAssist.pushAwayFrom(this, tower.getX(), tower.getZ(), 2.2);
+		}
+		for (BarrackEntity b : this.getWorld().getEntitiesByClass(BarrackEntity.class, box,
+				ent -> isEnemy(ent) && ent.isInvulnerableToAttack())) {
+			CreepStuckAssist.pushAwayFrom(this, b.getX(), b.getZ(), 2.4);
 		}
 		LivingEntity t = this.getTarget();
 		if (t != null && !isEnemy(t)) {
 			this.setTarget(null);
 		}
+		boolean fightingDamageable = t != null && !(t instanceof TowerEntity tw && tw.isInvulnerableToAttack())
+				&& !(t instanceof BarrackEntity br && br.isInvulnerableToAttack())
+				&& !(t instanceof AncientEntity an && !isAncientAttackable(an));
+		boolean wantsMove = !path.isEmpty() && !fightingDamageable;
+		CreepStuckAssist.tick(this, stuck, wantsMove, () -> {
+			snapPathForward();
+			// Skip up to 2 waypoints past the jam
+			for (int i = 0; i < 2 && pathIndex < path.size() - 1; i++) {
+				advancePath();
+			}
+			BlockPos wp = currentWaypoint();
+			if (wp != null) {
+				getNavigation().startMovingTo(wp.getX() + 0.5, wp.getY(), wp.getZ() + 0.5, 1.05);
+			}
+		});
 	}
 
 	/** Prefer enemy creeps / heroes over buildings; buildings → nearest attackable (open Ancient over invuln T4). */

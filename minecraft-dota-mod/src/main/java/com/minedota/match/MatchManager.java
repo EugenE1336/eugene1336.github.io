@@ -11,6 +11,7 @@ import com.minedota.hero.HeroCatalog;
 import com.minedota.hero.HeroDef;
 import com.minedota.hero.HeroManager;
 import com.minedota.hero.HeroProgress;
+import com.minedota.hero.ProgressionConstants;
 import com.minedota.item.ModItems;
 import com.minedota.lobby.LobbyMap;
 import com.minedota.lobby.LobbySetup;
@@ -78,7 +79,25 @@ public final class MatchManager {
 	private static final int MAX_CREEPS_ON_MAP = 250;
 	/** Enemy-team bots queued in lobby (team = bot's side). */
 	private final List<DotaTeam> pendingBots = new ArrayList<>();
+	/** Dead bots waiting to respawn at fountain (same rules as heroes). */
+	private final List<PendingBotRespawn> botRespawns = new ArrayList<>();
 	private final java.util.Random botRandom = new java.util.Random();
+
+	private static final class PendingBotRespawn {
+		final DotaTeam team;
+		final String heroId;
+		final int level;
+		final int xp;
+		int ticksLeft;
+
+		PendingBotRespawn(DotaTeam team, String heroId, int level, int xp, int ticksLeft) {
+			this.team = team;
+			this.heroId = heroId;
+			this.level = level;
+			this.xp = xp;
+			this.ticksLeft = ticksLeft;
+		}
+	}
 
 	private MatchManager() {
 		kills.put(DotaTeam.RADIANT, 0);
@@ -567,6 +586,7 @@ public final class MatchManager {
 		}
 		cleanupCreeps(server);
 		pendingBots.clear();
+		botRespawns.clear();
 		phase = Phase.LOBBY;
 		waveNumber = 0;
 		tickCounter = 0;
@@ -700,6 +720,67 @@ public final class MatchManager {
 			spawnWave(server.getOverworld());
 			syncPhase(server);
 		}
+		tickBotRespawns(server.getOverworld());
+	}
+
+	/** Queue fountain respawn for a bot that just died (same timer as players). */
+	public void scheduleBotRespawn(BotHeroEntity bot) {
+		if (phase != Phase.IN_GAME || bot == null) {
+			return;
+		}
+		DotaTeam team = bot.getDotaTeam();
+		if (team == DotaTeam.NONE) {
+			return;
+		}
+		int level = Math.max(1, bot.getHeroLevel());
+		botRespawns.add(new PendingBotRespawn(
+				team,
+				bot.getHeroId(),
+				level,
+				bot.getXp(),
+				ProgressionConstants.respawnTicks(level)));
+	}
+
+	private void tickBotRespawns(ServerWorld world) {
+		if (botRespawns.isEmpty() || layout == null) {
+			return;
+		}
+		var it = botRespawns.iterator();
+		while (it.hasNext()) {
+			PendingBotRespawn pending = it.next();
+			pending.ticksLeft--;
+			if (pending.ticksLeft > 0) {
+				continue;
+			}
+			it.remove();
+			respawnBot(world, pending);
+		}
+	}
+
+	private void respawnBot(ServerWorld world, PendingBotRespawn pending) {
+		BotHeroEntity bot = ModEntities.BOT_HERO.create(world);
+		if (bot == null) {
+			return;
+		}
+		BlockPos base = pending.team == DotaTeam.RADIANT ? layout.radiantSpawn() : layout.direSpawn();
+		LaneChunkLoader.ensureLoaded(world, base);
+		int y = DotaMap.surfaceY(base.getX(), base.getZ()) + 1;
+		bot.refreshPositionAndAngles(base.getX() + 0.5, y, base.getZ() + 0.5,
+				pending.team == DotaTeam.RADIANT ? -45f : 135f, 0f);
+		bot.setup(pending.team, pending.heroId, BotHeroEntity.midPathToEnemyT2(pending.team));
+		bot.restoreProgress(pending.level, pending.xp);
+		bot.setPersistent();
+		if (!world.spawnEntity(bot)) {
+			broadcast(world.getServer(), Text.literal("Бот не возродился: " + pending.heroId)
+					.formatted(Formatting.RED));
+			return;
+		}
+		HeroDef def = HeroCatalog.get(pending.heroId);
+		String name = def != null ? def.name() : pending.heroId;
+		broadcast(world.getServer(), Text.literal("Бот вернулся: ")
+				.append(pending.team.getDisplayName())
+				.append(Text.literal(" — " + name + " L" + pending.level)
+						.formatted(Formatting.AQUA)));
 	}
 
 	private void syncPhase(MinecraftServer server) {

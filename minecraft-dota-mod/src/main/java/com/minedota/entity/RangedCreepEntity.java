@@ -10,6 +10,7 @@ import net.minecraft.entity.attribute.DefaultAttributeContainer;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.mob.SkeletonEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.projectile.PersistentProjectileEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.nbt.NbtCompound;
@@ -35,6 +36,7 @@ public class RangedCreepEntity extends SkeletonEntity implements TeamComponent.T
 	private final List<BlockPos> path = new ArrayList<>();
 	private int pathIndex;
 	private boolean superCreep;
+	private final CreepStuckAssist.State stuck = new CreepStuckAssist.State();
 
 	public RangedCreepEntity(EntityType<? extends SkeletonEntity> entityType, World world) {
 		super(entityType, world);
@@ -49,6 +51,16 @@ public class RangedCreepEntity extends SkeletonEntity implements TeamComponent.T
 				.add(EntityAttributes.GENERIC_MOVEMENT_SPEED, 0.26)
 				.add(EntityAttributes.GENERIC_FOLLOW_RANGE, 18.0)
 				.add(EntityAttributes.GENERIC_ARMOR, 0.0);
+	}
+
+	/** Custom arrows ignore allied heroes/creeps so they can hit towers behind them. */
+	@Override
+	protected PersistentProjectileEntity createArrowProjectile(ItemStack arrow, float damageModifier) {
+		AllyPassArrowEntity proj = new AllyPassArrowEntity(this.getWorld(), this);
+		proj.initFromStack(arrow);
+		double base = this.getAttributeValue(EntityAttributes.GENERIC_ATTACK_DAMAGE);
+		proj.setDamage(base * Math.max(0.1f, damageModifier));
+		return proj;
 	}
 
 	@Override
@@ -176,6 +188,7 @@ public class RangedCreepEntity extends SkeletonEntity implements TeamComponent.T
 		Box box = this.getBoundingBox().expand(1.2);
 		for (TowerEntity tower : this.getWorld().getEntitiesByClass(TowerEntity.class, box, this::isEnemy)) {
 			if (tower.isInvulnerableToAttack()) {
+				CreepStuckAssist.pushAwayFrom(this, tower.getX(), tower.getZ(), 2.4);
 				continue;
 			}
 			if (this.getTarget() == null || this.getTarget() == tower
@@ -192,27 +205,30 @@ public class RangedCreepEntity extends SkeletonEntity implements TeamComponent.T
 		}
 		for (TowerEntity tower : this.getWorld().getEntitiesByClass(TowerEntity.class, box,
 				t -> TeamComponent.getTeam(t) == team)) {
-			double dx = this.getX() - tower.getX();
-			double dz = this.getZ() - tower.getZ();
-			double len = Math.sqrt(dx * dx + dz * dz);
-			if (len < 1.6) {
-				if (len < 0.05) {
-					dx = 1;
-					dz = 0;
-					len = 1;
-				}
-				this.refreshPositionAndAngles(
-						tower.getX() + dx / len * 2.2,
-						this.getY(),
-						tower.getZ() + dz / len * 2.2,
-						this.getYaw(), this.getPitch());
-				this.getNavigation().stop();
-			}
+			CreepStuckAssist.pushAwayFrom(this, tower.getX(), tower.getZ(), 2.2);
+		}
+		for (BarrackEntity b : this.getWorld().getEntitiesByClass(BarrackEntity.class, box,
+				ent -> isEnemy(ent) && ent.isInvulnerableToAttack())) {
+			CreepStuckAssist.pushAwayFrom(this, b.getX(), b.getZ(), 2.4);
 		}
 		LivingEntity t = this.getTarget();
 		if (t != null && !isEnemy(t)) {
 			this.setTarget(null);
 		}
+		boolean fightingDamageable = t != null && !(t instanceof TowerEntity tw && tw.isInvulnerableToAttack())
+				&& !(t instanceof BarrackEntity br && br.isInvulnerableToAttack())
+				&& !(t instanceof AncientEntity an && !isAncientAttackable(an));
+		boolean wantsMove = !path.isEmpty() && !fightingDamageable;
+		CreepStuckAssist.tick(this, stuck, wantsMove, () -> {
+			snapPathForward();
+			for (int i = 0; i < 2 && pathIndex < path.size() - 1; i++) {
+				advancePath();
+			}
+			BlockPos wp = currentWaypoint();
+			if (wp != null) {
+				getNavigation().startMovingTo(wp.getX() + 0.5, wp.getY(), wp.getZ() + 0.5, 1.05);
+			}
+		});
 	}
 
 	private void retargetPreferUnits() {

@@ -6,12 +6,10 @@ import com.minedota.entity.CreepEntity;
 import com.minedota.entity.RangedCreepEntity;
 import com.minedota.entity.TowerEntity;
 import com.minedota.match.MatchManager;
-import com.minedota.network.ModNetworking;
 import com.minedota.team.DotaTeam;
 import com.minedota.team.TeamComponent;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
@@ -22,10 +20,10 @@ import net.minecraft.util.math.Vec3d;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * XP / gold distribution on kills.
+ * Bots level from creep/hero XP the same way as players (no gold economy).
  */
 public final class KillRewards {
 	private KillRewards() {
@@ -41,32 +39,25 @@ public final class KillRewards {
 			return;
 		}
 
-		ServerPlayerEntity killer = findKillerPlayer(source);
+		ServerPlayerEntity killerPlayer = findKillerPlayer(source);
+		BotHeroEntity killerBot = findKillerBot(source);
 		if (dead instanceof CreepEntity || dead instanceof RangedCreepEntity) {
-			rewardCreep(server, dead, killer);
+			rewardCreep(server, dead, killerPlayer, killerBot);
 		} else if (dead instanceof TowerEntity tower) {
 			rewardTower(server, tower);
 		} else if (dead instanceof BarrackEntity) {
 			// Gold/message handled in MatchManager.onBarrackDestroyed
 		} else if (dead instanceof BotHeroEntity bot) {
-			// Bots count as heroes for XP / gold / team score
-			rewardHeroKill(server, bot.getPos(), TeamComponent.getTeam(bot), botHeroLevel(bot), killer, null);
+			rewardHeroKill(server, bot.getPos(), TeamComponent.getTeam(bot),
+					Math.max(1, bot.getHeroLevel()), killerPlayer, killerBot, null);
+			MatchManager.get(server).scheduleBotRespawn(bot);
 		} else if (dead instanceof ServerPlayerEntity victim) {
 			HeroManager hm = HeroManager.get(server);
 			HeroProgress victimProg = hm.getProgress(victim.getUuid());
 			int victimLevel = victimProg != null ? victimProg.getLevel() : 1;
-			rewardHeroKill(server, victim.getPos(), TeamComponent.getTeam(victim), victimLevel, killer, victim);
+			rewardHeroKill(server, victim.getPos(), TeamComponent.getTeam(victim),
+					victimLevel, killerPlayer, killerBot, victim);
 		}
-	}
-
-	/** Bot effective level for bounty (scales with match clock like a mid-game hero). */
-	private static int botHeroLevel(BotHeroEntity bot) {
-		if (bot.getWorld().getServer() == null) {
-			return 1;
-		}
-		int sec = MatchManager.get(bot.getWorld().getServer()).getCombatSeconds();
-		// ~+1 level / 90s, cap 15
-		return Math.max(1, Math.min(ProgressionConstants.MAX_LEVEL, 1 + sec / 90));
 	}
 
 	private static ServerPlayerEntity findKillerPlayer(DamageSource source) {
@@ -79,18 +70,38 @@ public final class KillRewards {
 		return null;
 	}
 
-	private static void rewardCreep(MinecraftServer server, LivingEntity creep, ServerPlayerEntity killer) {
+	private static BotHeroEntity findKillerBot(DamageSource source) {
+		if (source.getAttacker() instanceof BotHeroEntity b) {
+			return b;
+		}
+		if (source.getSource() instanceof BotHeroEntity b) {
+			return b;
+		}
+		return null;
+	}
+
+	private static void rewardCreep(MinecraftServer server, LivingEntity creep,
+			ServerPlayerEntity killerPlayer, BotHeroEntity killerBot) {
 		DotaTeam creepTeam = TeamComponent.getTeam(creep);
 		DotaTeam enemyOfCreep = creepTeam.opposite();
 		if (enemyOfCreep == DotaTeam.NONE) {
 			return;
 		}
-		List<ServerPlayerEntity> nearby = alliesInRadius(server, creep.getPos(), enemyOfCreep, ProgressionConstants.REWARD_RADIUS);
-		if (nearby.isEmpty() && killer != null && TeamComponent.getTeam(killer) == enemyOfCreep) {
-			nearby = List.of(killer);
+		List<ServerPlayerEntity> nearbyPlayers = alliesInRadius(server, creep.getPos(), enemyOfCreep,
+				ProgressionConstants.REWARD_RADIUS);
+		if (nearbyPlayers.isEmpty() && killerPlayer != null
+				&& TeamComponent.getTeam(killerPlayer) == enemyOfCreep) {
+			nearbyPlayers = List.of(killerPlayer);
 		}
+		List<BotHeroEntity> nearbyBots = allyBotsInRadius(server, creep.getPos(), enemyOfCreep,
+				ProgressionConstants.REWARD_RADIUS);
+		if (nearbyBots.isEmpty() && killerBot != null
+				&& TeamComponent.getTeam(killerBot) == enemyOfCreep) {
+			nearbyBots = List.of(killerBot);
+		}
+
 		HeroManager hm = HeroManager.get(server);
-		for (ServerPlayerEntity p : nearby) {
+		for (ServerPlayerEntity p : nearbyPlayers) {
 			HeroProgress prog = hm.getProgress(p.getUuid());
 			if (prog == null) {
 				continue;
@@ -102,6 +113,9 @@ public final class KillRewards {
 			}
 			hm.applyHeroStats(p);
 			hm.syncState(p);
+		}
+		for (BotHeroEntity bot : nearbyBots) {
+			bot.addXp(ProgressionConstants.CREEP_XP);
 		}
 	}
 
@@ -127,7 +141,8 @@ public final class KillRewards {
 	}
 
 	private static void rewardHeroKill(MinecraftServer server, Vec3d pos, DotaTeam victimTeam,
-			int victimLevel, ServerPlayerEntity killer, ServerPlayerEntity victimPlayer) {
+			int victimLevel, ServerPlayerEntity killerPlayer, BotHeroEntity killerBot,
+			ServerPlayerEntity victimPlayer) {
 		HeroManager hm = HeroManager.get(server);
 		DotaTeam winnerTeam = victimTeam == null ? DotaTeam.NONE : victimTeam.opposite();
 		if (winnerTeam == DotaTeam.NONE) {
@@ -141,54 +156,68 @@ public final class KillRewards {
 				+ ProgressionConstants.HERO_GOLD_PER_LEVEL * victimLevel;
 		int assistPool = ProgressionConstants.ASSIST_GOLD_PER_LEVEL * victimLevel;
 
-		List<ServerPlayerEntity> nearby = alliesInRadius(server, pos, winnerTeam, ProgressionConstants.REWARD_RADIUS);
-
-		// Ensure killer gets credit even if somehow outside radius
-		if (killer != null && TeamComponent.getTeam(killer) == winnerTeam) {
-			boolean inList = nearby.stream().anyMatch(p -> p.getUuid().equals(killer.getUuid()));
+		List<ServerPlayerEntity> nearbyPlayers = alliesInRadius(server, pos, winnerTeam,
+				ProgressionConstants.REWARD_RADIUS);
+		if (killerPlayer != null && TeamComponent.getTeam(killerPlayer) == winnerTeam) {
+			boolean inList = nearbyPlayers.stream().anyMatch(p -> p.getUuid().equals(killerPlayer.getUuid()));
 			if (!inList) {
-				nearby = new ArrayList<>(nearby);
-				nearby.add(killer);
+				nearbyPlayers = new ArrayList<>(nearbyPlayers);
+				nearbyPlayers.add(killerPlayer);
 			}
 		}
 
-		if (nearby.isEmpty() && killer != null && TeamComponent.getTeam(killer) == winnerTeam) {
-			nearby = List.of(killer);
+		List<BotHeroEntity> nearbyBots = allyBotsInRadius(server, pos, winnerTeam,
+				ProgressionConstants.REWARD_RADIUS);
+		if (killerBot != null && TeamComponent.getTeam(killerBot) == winnerTeam) {
+			boolean inList = nearbyBots.stream().anyMatch(b -> b.getUuid().equals(killerBot.getUuid()));
+			if (!inList) {
+				nearbyBots = new ArrayList<>(nearbyBots);
+				nearbyBots.add(killerBot);
+			}
 		}
 
-		int n = nearby.size();
-		if (n > 0) {
-			int xpEach = xpPool / n;
-			int xpRem = xpPool % n;
-			for (int i = 0; i < n; i++) {
-				ServerPlayerEntity p = nearby.get(i);
+		int shareCount = nearbyPlayers.size() + nearbyBots.size();
+		if (shareCount > 0) {
+			int xpEach = xpPool / shareCount;
+			int xpRem = xpPool % shareCount;
+			int idx = 0;
+			for (ServerPlayerEntity p : nearbyPlayers) {
 				HeroProgress prog = hm.getProgress(p.getUuid());
 				if (prog == null) {
+					idx++;
 					continue;
 				}
-				int xp = xpEach + (i < xpRem ? 1 : 0);
+				int xp = xpEach + (idx < xpRem ? 1 : 0);
 				int gained = prog.addXp(xp);
 				if (gained > 0) {
 					playLevelUp(p, prog.getLevel());
 				}
 				hm.applyHeroStats(p);
+				idx++;
+			}
+			for (BotHeroEntity bot : nearbyBots) {
+				int xp = xpEach + (idx < xpRem ? 1 : 0);
+				bot.addXp(xp);
+				idx++;
 			}
 		}
 
-		if (killer != null && TeamComponent.getTeam(killer) == winnerTeam) {
-			HeroProgress kp = hm.getProgress(killer.getUuid());
+		if (killerPlayer != null && TeamComponent.getTeam(killerPlayer) == winnerTeam) {
+			HeroProgress kp = hm.getProgress(killerPlayer.getUuid());
 			if (kp != null) {
 				kp.addGold(killGold);
 				kp.addKill();
-				killer.sendMessage(Text.literal("+" + killGold + "g килл (ур." + victimLevel + ")")
+				killerPlayer.sendMessage(Text.literal("+" + killGold + "g килл (ур." + victimLevel + ")")
 						.formatted(Formatting.GOLD), true);
 			}
+			MatchManager.get(server).addTeamKill(winnerTeam);
+		} else if (killerBot != null && TeamComponent.getTeam(killerBot) == winnerTeam) {
 			MatchManager.get(server).addTeamKill(winnerTeam);
 		}
 
 		List<ServerPlayerEntity> assists = new ArrayList<>();
-		for (ServerPlayerEntity p : nearby) {
-			if (killer != null && p.getUuid().equals(killer.getUuid())) {
+		for (ServerPlayerEntity p : nearbyPlayers) {
+			if (killerPlayer != null && p.getUuid().equals(killerPlayer.getUuid())) {
 				continue;
 			}
 			assists.add(p);
@@ -209,14 +238,13 @@ public final class KillRewards {
 			}
 		}
 
-		for (ServerPlayerEntity p : nearby) {
+		for (ServerPlayerEntity p : nearbyPlayers) {
 			hm.syncState(p);
 		}
-		if (killer != null) {
-			hm.syncState(killer);
+		if (killerPlayer != null) {
+			hm.syncState(killerPlayer);
 		}
 
-		// Respawn timer only for real players
 		if (victimPlayer != null) {
 			HeroProgress victimProg = hm.getProgress(victimPlayer.getUuid());
 			if (victimProg != null) {
@@ -227,7 +255,8 @@ public final class KillRewards {
 		}
 	}
 
-	private static List<ServerPlayerEntity> alliesInRadius(MinecraftServer server, Vec3d pos, DotaTeam team, double radius) {
+	private static List<ServerPlayerEntity> alliesInRadius(MinecraftServer server, Vec3d pos,
+			DotaTeam team, double radius) {
 		List<ServerPlayerEntity> out = new ArrayList<>();
 		double r2 = radius * radius;
 		for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
@@ -240,6 +269,27 @@ public final class KillRewards {
 			}
 			if (p.squaredDistanceTo(pos) <= r2) {
 				out.add(p);
+			}
+		}
+		return out;
+	}
+
+	private static List<BotHeroEntity> allyBotsInRadius(MinecraftServer server, Vec3d pos,
+			DotaTeam team, double radius) {
+		List<BotHeroEntity> out = new ArrayList<>();
+		ServerWorld world = server.getOverworld();
+		if (world == null) {
+			return out;
+		}
+		double r = radius;
+		Box box = new Box(pos.x - r, pos.y - r, pos.z - r, pos.x + r, pos.y + r, pos.z + r);
+		double r2 = r * r;
+		for (BotHeroEntity bot : world.getEntitiesByClass(BotHeroEntity.class, box, b -> b.isAlive())) {
+			if (TeamComponent.getTeam(bot) != team) {
+				continue;
+			}
+			if (bot.squaredDistanceTo(pos) <= r2) {
+				out.add(bot);
 			}
 		}
 		return out;
