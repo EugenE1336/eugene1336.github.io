@@ -1,6 +1,7 @@
 package com.minedota.hero;
 
 import com.minedota.entity.BarrackEntity;
+import com.minedota.entity.BotHeroEntity;
 import com.minedota.entity.CreepEntity;
 import com.minedota.entity.RangedCreepEntity;
 import com.minedota.entity.TowerEntity;
@@ -47,9 +48,25 @@ public final class KillRewards {
 			rewardTower(server, tower);
 		} else if (dead instanceof BarrackEntity) {
 			// Gold/message handled in MatchManager.onBarrackDestroyed
+		} else if (dead instanceof BotHeroEntity bot) {
+			// Bots count as heroes for XP / gold / team score
+			rewardHeroKill(server, bot.getPos(), TeamComponent.getTeam(bot), botHeroLevel(bot), killer, null);
 		} else if (dead instanceof ServerPlayerEntity victim) {
-			rewardHeroKill(server, victim, killer);
+			HeroManager hm = HeroManager.get(server);
+			HeroProgress victimProg = hm.getProgress(victim.getUuid());
+			int victimLevel = victimProg != null ? victimProg.getLevel() : 1;
+			rewardHeroKill(server, victim.getPos(), TeamComponent.getTeam(victim), victimLevel, killer, victim);
 		}
+	}
+
+	/** Bot effective level for bounty (scales with match clock like a mid-game hero). */
+	private static int botHeroLevel(BotHeroEntity bot) {
+		if (bot.getWorld().getServer() == null) {
+			return 1;
+		}
+		int sec = MatchManager.get(bot.getWorld().getServer()).getCombatSeconds();
+		// ~+1 level / 90s, cap 15
+		return Math.max(1, Math.min(ProgressionConstants.MAX_LEVEL, 1 + sec / 90));
 	}
 
 	private static ServerPlayerEntity findKillerPlayer(DamageSource source) {
@@ -109,15 +126,14 @@ public final class KillRewards {
 		}
 	}
 
-	private static void rewardHeroKill(MinecraftServer server, ServerPlayerEntity victim, ServerPlayerEntity killer) {
+	private static void rewardHeroKill(MinecraftServer server, Vec3d pos, DotaTeam victimTeam,
+			int victimLevel, ServerPlayerEntity killer, ServerPlayerEntity victimPlayer) {
 		HeroManager hm = HeroManager.get(server);
-		HeroProgress victimProg = hm.getProgress(victim.getUuid());
-		int victimLevel = victimProg != null ? victimProg.getLevel() : 1;
-		DotaTeam victimTeam = TeamComponent.getTeam(victim);
-		DotaTeam winnerTeam = victimTeam.opposite();
+		DotaTeam winnerTeam = victimTeam == null ? DotaTeam.NONE : victimTeam.opposite();
 		if (winnerTeam == DotaTeam.NONE) {
 			return;
 		}
+		victimLevel = Math.max(1, victimLevel);
 
 		int xpPool = ProgressionConstants.HERO_XP_BASE
 				+ ProgressionConstants.HERO_XP_PER_LEVEL * victimLevel;
@@ -125,7 +141,6 @@ public final class KillRewards {
 				+ ProgressionConstants.HERO_GOLD_PER_LEVEL * victimLevel;
 		int assistPool = ProgressionConstants.ASSIST_GOLD_PER_LEVEL * victimLevel;
 
-		Vec3d pos = victim.getPos();
 		List<ServerPlayerEntity> nearby = alliesInRadius(server, pos, winnerTeam, ProgressionConstants.REWARD_RADIUS);
 
 		// Ensure killer gets credit even if somehow outside radius
@@ -201,11 +216,14 @@ public final class KillRewards {
 			hm.syncState(killer);
 		}
 
-		// Respawn timer for victim
-		if (victimProg != null) {
-			victimProg.addDeath();
-			victimProg.beginRespawn();
-			hm.syncState(victim);
+		// Respawn timer only for real players
+		if (victimPlayer != null) {
+			HeroProgress victimProg = hm.getProgress(victimPlayer.getUuid());
+			if (victimProg != null) {
+				victimProg.addDeath();
+				victimProg.beginRespawn();
+				hm.syncState(victimPlayer);
+			}
 		}
 	}
 

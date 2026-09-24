@@ -49,7 +49,7 @@ git commit -m "minedota: vX.Y.Z — краткое описание"
 git push origin main
 ```
 
-Скачать: `minecraft-dota-mod/releases/minedota-0.1.44.jar`
+Скачать: `minecraft-dota-mod/releases/minedota-0.1.45.jar`
 
 Не коммитить: `build/`, `.gradle/`, `.jdk/`, `run/` (см. `.gitignore`). `releases/*.jar` — **нужно** коммитить.
 
