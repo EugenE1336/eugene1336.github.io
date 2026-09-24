@@ -66,6 +66,8 @@ public final class MatchManager {
 	private int phaseTicksLeft;
 	private int waveNumber;
 	private final Map<UUID, DotaTeam> players = new HashMap<>();
+	/** Chronological side picks — last entries move first when balancing. */
+	private final List<UUID> teamPickOrder = new ArrayList<>();
 	private final EnumMap<DotaTeam, Integer> kills = new EnumMap<>(DotaTeam.class);
 	/** Keys: teamId|LANE|tier */
 	private final Set<String> destroyedTowers = new HashSet<>();
@@ -259,6 +261,8 @@ public final class MatchManager {
 		}
 
 		players.put(player.getUuid(), team);
+		teamPickOrder.remove(player.getUuid());
+		teamPickOrder.add(player.getUuid());
 		TeamComponent.setPlayerTeam(player, team);
 		player.changeGameMode(GameMode.ADVENTURE);
 
@@ -328,6 +332,7 @@ public final class MatchManager {
 	}
 
 	private void beginHeroSelect(MinecraftServer server) {
+		balanceTeamsByLastPicks(server);
 		HeroManager.get(server).clearAll();
 		phase = Phase.HERO_SELECT;
 		phaseTicksLeft = HERO_SELECT_TICKS;
@@ -336,6 +341,52 @@ public final class MatchManager {
 		openHeroSelectForAll(server);
 		syncPhase(server);
 		checkEarlyShop(server);
+	}
+
+	/**
+	 * If one side has 2+ more players than the other, move the latest pickers
+	 * to the smaller side until the gap is ≤1. Bots are not touched.
+	 */
+	private void balanceTeamsByLastPicks(MinecraftServer server) {
+		int moved = 0;
+		while (true) {
+			List<UUID> radiant = new ArrayList<>();
+			List<UUID> dire = new ArrayList<>();
+			for (UUID id : teamPickOrder) {
+				DotaTeam t = players.get(id);
+				if (t == DotaTeam.RADIANT) {
+					radiant.add(id);
+				} else if (t == DotaTeam.DIRE) {
+					dire.add(id);
+				}
+			}
+			int r = radiant.size();
+			int d = dire.size();
+			if (Math.abs(r - d) < 2) {
+				break;
+			}
+			boolean radiantBigger = r > d;
+			UUID moveId = radiantBigger ? radiant.get(radiant.size() - 1) : dire.get(dire.size() - 1);
+			DotaTeam to = radiantBigger ? DotaTeam.DIRE : DotaTeam.RADIANT;
+			players.put(moveId, to);
+			// Keep relative order: treat as newest on new team
+			teamPickOrder.remove(moveId);
+			teamPickOrder.add(moveId);
+			ServerPlayerEntity p = server.getPlayerManager().getPlayer(moveId);
+			if (p != null) {
+				TeamComponent.setPlayerTeam(p, to);
+				p.sendMessage(Text.literal("Баланс команд: ты → ").append(to.getDisplayName())
+						.formatted(Formatting.YELLOW), false);
+			}
+			moved++;
+		}
+		if (moved > 0) {
+			long r = players.values().stream().filter(t -> t == DotaTeam.RADIANT).count();
+			long d = players.values().stream().filter(t -> t == DotaTeam.DIRE).count();
+			broadcast(server, Text.literal("⚖ Баланс: перенесено " + moved
+					+ " игрок(ов) → Radiant " + r + " / Dire " + d)
+					.formatted(Formatting.GOLD));
+		}
 	}
 
 	private void beginShop(MinecraftServer server) {
@@ -839,6 +890,7 @@ public final class MatchManager {
 	public void onPlayerLeave(ServerPlayerEntity player) {
 		if (phase != Phase.IN_GAME) {
 			players.remove(player.getUuid());
+			teamPickOrder.remove(player.getUuid());
 			HeroManager.get(player.getServer()).clearPick(player.getUuid());
 			HeroManager.get(player.getServer()).broadcastPicks(player.getServer());
 		}
