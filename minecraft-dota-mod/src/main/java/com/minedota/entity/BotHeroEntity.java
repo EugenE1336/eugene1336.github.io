@@ -198,10 +198,21 @@ public class BotHeroEntity extends PathAwareEntity implements TeamComponent.Team
 	private void refreshName() {
 		HeroDef def = HeroCatalog.get(heroId);
 		String name = def != null ? def.name() : heroId;
-		String label = botNumber > 0 ? ("Бот" + botNumber) : "Bot";
+		String label = botNumber > 0 ? ("Бот" + botNumber) : "Бот";
+		int hp = Math.max(0, Math.round(this.getHealth()));
+		int max = Math.max(1, Math.round(this.getMaxHealth()));
 		this.setCustomName(team.getDisplayName().copy()
-				.append(net.minecraft.text.Text.literal(" " + label + " " + name + " L" + level)));
+				.append(net.minecraft.text.Text.literal(
+						" " + label + " " + name + " L" + level + " " + hp + "/" + max)));
 		this.setCustomNameVisible(true);
+	}
+
+	@Override
+	public void tick() {
+		super.tick();
+		if (!this.getWorld().isClient && this.isAlive() && this.age % 5 == 0) {
+			refreshName();
+		}
 	}
 
 	@Override
