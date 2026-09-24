@@ -1,5 +1,6 @@
 package com.minedota.entity;
 
+import com.minedota.match.MatchManager;
 import com.minedota.team.DotaTeam;
 import com.minedota.team.TeamComponent;
 import net.minecraft.entity.EntityType;
@@ -120,9 +121,12 @@ public class CreepEntity extends ZombieEntity implements TeamComponent.TeamHolde
 				entity -> entity instanceof TeamComponent.TeamHolder && isEnemy(entity)
 						&& !(entity instanceof TowerEntity) && !(entity instanceof AncientEntity)
 						&& !(entity instanceof BarrackEntity)));
-		this.targetSelector.add(3, new ActiveTargetGoal<>(this, TowerEntity.class, 10, true, false, this::isEnemy));
-		this.targetSelector.add(4, new ActiveTargetGoal<>(this, BarrackEntity.class, 10, true, false, this::isEnemy));
-		this.targetSelector.add(5, new ActiveTargetGoal<>(this, AncientEntity.class, 10, true, false, this::isEnemy));
+		this.targetSelector.add(3, new ActiveTargetGoal<>(this, TowerEntity.class, 10, true, false,
+				e -> isEnemy(e) && !((TowerEntity) e).isInvulnerableToAttack()));
+		this.targetSelector.add(4, new ActiveTargetGoal<>(this, BarrackEntity.class, 10, true, false,
+				e -> isEnemy(e) && !((BarrackEntity) e).isInvulnerableToAttack()));
+		this.targetSelector.add(5, new ActiveTargetGoal<>(this, AncientEntity.class, 10, true, false,
+				e -> isEnemy(e) && isAncientAttackable((AncientEntity) e)));
 	}
 
 	private boolean isEnemy(LivingEntity entity) {
@@ -164,16 +168,21 @@ public class CreepEntity extends ZombieEntity implements TeamComponent.TeamHolde
 			refreshNameplate();
 		}
 		retargetPreferUnits();
-		// Unstick only from ALLIED towers; enemy towers = attack target
+		// Unstick only from ALLIED towers; enemy buildings = attackable target only
 		Box box = this.getBoundingBox().expand(1.2);
 		for (TowerEntity tower : this.getWorld().getEntitiesByClass(TowerEntity.class, box, this::isEnemy)) {
+			if (tower.isInvulnerableToAttack()) {
+				continue;
+			}
 			if (this.getTarget() == null || this.getTarget() == tower
-					|| this.getTarget() instanceof TowerEntity || this.getTarget() instanceof AncientEntity) {
+					|| this.getTarget() instanceof TowerEntity || this.getTarget() instanceof AncientEntity
+					|| this.getTarget() instanceof BarrackEntity) {
 				LivingEntity unit = findNearbyEnemyUnit(10.0);
 				if (unit != null) {
 					this.setTarget(unit);
 				} else {
-					this.setTarget(tower);
+					LivingEntity structure = findPreferredEnemyStructure(12.0);
+					this.setTarget(structure != null ? structure : tower);
 				}
 			}
 		}
@@ -202,7 +211,7 @@ public class CreepEntity extends ZombieEntity implements TeamComponent.TeamHolde
 		}
 	}
 
-	/** Prefer enemy creeps / heroes over towers. */
+	/** Prefer enemy creeps / heroes over buildings; buildings → nearest attackable (open Ancient over invuln T4). */
 	void retargetPreferUnits() {
 		LivingEntity current = this.getTarget();
 		LivingEntity unit = findNearbyEnemyUnit(12.0);
@@ -214,10 +223,23 @@ public class CreepEntity extends ZombieEntity implements TeamComponent.TeamHolde
 			}
 			return;
 		}
-		if (current == null) {
-			TowerEntity tower = findBlockingEnemyTower(10.0);
-			if (tower != null) {
-				this.setTarget(tower);
+		// Drop invulnerable / closed structure targets
+		if (current instanceof TowerEntity t && t.isInvulnerableToAttack()) {
+			this.setTarget(null);
+			current = null;
+		} else if (current instanceof BarrackEntity b && b.isInvulnerableToAttack()) {
+			this.setTarget(null);
+			current = null;
+		} else if (current instanceof AncientEntity a && !isAncientAttackable(a)) {
+			this.setTarget(null);
+			current = null;
+		}
+		if (current == null || current instanceof TowerEntity || current instanceof BarrackEntity
+				|| current instanceof AncientEntity) {
+			LivingEntity structure = findPreferredEnemyStructure(14.0);
+			if (structure != null && (current == null
+					|| this.squaredDistanceTo(structure) + 1.0 < this.squaredDistanceTo(current))) {
+				this.setTarget(structure);
 			}
 		}
 	}
@@ -239,12 +261,60 @@ public class CreepEntity extends ZombieEntity implements TeamComponent.TeamHolde
 		return best;
 	}
 
+	/**
+	 * Nearest attackable enemy structure. Skips invulnerable towers/barracks and closed Ancient —
+	 * so creeps walk past locked T4 toward an open throne when it's closer.
+	 */
+	LivingEntity findPreferredEnemyStructure(double range) {
+		Box box = this.getBoundingBox().expand(range);
+		LivingEntity best = null;
+		double bestDist = range * range;
+		for (TowerEntity t : this.getWorld().getEntitiesByClass(TowerEntity.class, box, this::isEnemy)) {
+			if (!t.isAlive() || t.isInvulnerableToAttack()) {
+				continue;
+			}
+			double d = this.squaredDistanceTo(t);
+			if (d < bestDist) {
+				bestDist = d;
+				best = t;
+			}
+		}
+		for (BarrackEntity b : this.getWorld().getEntitiesByClass(BarrackEntity.class, box, this::isEnemy)) {
+			if (!b.isAlive() || b.isInvulnerableToAttack()) {
+				continue;
+			}
+			double d = this.squaredDistanceTo(b);
+			if (d < bestDist) {
+				bestDist = d;
+				best = b;
+			}
+		}
+		for (AncientEntity a : this.getWorld().getEntitiesByClass(AncientEntity.class, box, this::isEnemy)) {
+			if (!a.isAlive() || !isAncientAttackable(a)) {
+				continue;
+			}
+			double d = this.squaredDistanceTo(a);
+			if (d < bestDist) {
+				bestDist = d;
+				best = a;
+			}
+		}
+		return best;
+	}
+
+	boolean isAncientAttackable(AncientEntity ancient) {
+		if (this.getWorld().isClient || this.getWorld().getServer() == null) {
+			return false;
+		}
+		return MatchManager.get(this.getWorld().getServer()).canDamageAncient(ancient);
+	}
+
 	TowerEntity findBlockingEnemyTower(double range) {
 		Box box = this.getBoundingBox().expand(range);
 		TowerEntity best = null;
 		double bestDist = range * range;
 		for (TowerEntity t : this.getWorld().getEntitiesByClass(TowerEntity.class, box, this::isEnemy)) {
-			if (!t.isAlive()) {
+			if (!t.isAlive() || t.isInvulnerableToAttack()) {
 				continue;
 			}
 			double d = this.squaredDistanceTo(t);
@@ -261,7 +331,7 @@ public class CreepEntity extends ZombieEntity implements TeamComponent.TeamHolde
 		BarrackEntity best = null;
 		double bestDist = range * range;
 		for (BarrackEntity b : this.getWorld().getEntitiesByClass(BarrackEntity.class, box, this::isEnemy)) {
-			if (!b.isAlive()) {
+			if (!b.isAlive() || b.isInvulnerableToAttack()) {
 				continue;
 			}
 			double d = this.squaredDistanceTo(b);
@@ -421,14 +491,9 @@ public class CreepEntity extends ZombieEntity implements TeamComponent.TeamHolde
 				if (unit != null) {
 					creep.setTarget(unit);
 				} else {
-					TowerEntity tower = creep.findBlockingEnemyTower(10.0);
-					if (tower != null) {
-						creep.setTarget(tower);
-					} else {
-						BarrackEntity barrack = creep.findBlockingEnemyBarrack(10.0);
-						if (barrack != null) {
-							creep.setTarget(barrack);
-						}
+					LivingEntity structure = creep.findPreferredEnemyStructure(12.0);
+					if (structure != null) {
+						creep.setTarget(structure);
 					}
 				}
 				return;
@@ -460,8 +525,9 @@ public class CreepEntity extends ZombieEntity implements TeamComponent.TeamHolde
 			creep.getNavigation().startMovingTo(wp.getX() + 0.5, wp.getY(), wp.getZ() + 0.5, 1.0);
 		}
 
+		/** Stop path only for attackable structures — skip locked T4 if Ancient is open. */
 		private boolean nearBlockingEnemyTower() {
-			return creep.findBlockingEnemyTower(8.0) != null || creep.findBlockingEnemyBarrack(8.0) != null;
+			return creep.findPreferredEnemyStructure(8.0) != null;
 		}
 
 		private boolean nearAlliedTower(BlockPos wp) {

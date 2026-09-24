@@ -72,6 +72,8 @@ public final class MatchManager {
 	/** Keys: teamId|LANE|MELEE|RANGED */
 	private final Set<String> destroyedBarracks = new HashSet<>();
 	private static final int MAX_BOTS = 5;
+	/** Soft cap for live lane creeps (melee+ranged). Also used as maxEntityCramming. */
+	private static final int MAX_CREEPS_ON_MAP = 250;
 	/** Enemy-team bots queued in lobby (team = bot's side). */
 	private final List<DotaTeam> pendingBots = new ArrayList<>();
 	private final java.util.Random botRandom = new java.util.Random();
@@ -209,6 +211,8 @@ public final class MatchManager {
 		world.getGameRules().get(GameRules.DO_PATROL_SPAWNING).set(false, server);
 		world.getGameRules().get(GameRules.DO_TRADER_SPAWNING).set(false, server);
 		world.getGameRules().get(GameRules.DO_WARDEN_SPAWNING).set(false, server);
+		// Default cramming=24 kills stacked lane creeps; allow up to soft creep cap
+		world.getGameRules().get(GameRules.MAX_ENTITY_CRAMMING).set(MAX_CREEPS_ON_MAP, server);
 		scrubVanillaMobs(world);
 	}
 
@@ -670,15 +674,41 @@ public final class MatchManager {
 	private void spawnWave(ServerWorld world) {
 		LaneChunkLoader.forceLoadArena(world);
 		waveNumber++;
+		int alive = countLaneCreeps(world);
+		int budget = Math.max(0, MAX_CREEPS_ON_MAP - alive);
+		if (budget <= 0) {
+			broadcast(world.getServer(), Text.literal(
+					"Волна #" + waveNumber + " пропущена — крипов уже " + alive + "/" + MAX_CREEPS_ON_MAP)
+					.formatted(Formatting.YELLOW));
+			return;
+		}
 		for (DotaMap.CreepSpawn spawn : layout.creepSpawns()) {
-			spawnCreepsOnLane(world, spawn);
+			if (budget <= 0) {
+				break;
+			}
+			int before = countLaneCreeps(world);
+			spawnCreepsOnLane(world, spawn, budget);
+			budget -= Math.max(0, countLaneCreeps(world) - before);
 		}
 		broadcast(world.getServer(), Text.literal("Волна #" + waveNumber).formatted(Formatting.AQUA));
 	}
 
+	private static int countLaneCreeps(ServerWorld world) {
+		int n = 0;
+		for (var e : world.iterateEntities()) {
+			if (e instanceof CreepEntity || e instanceof RangedCreepEntity) {
+				n++;
+			}
+		}
+		return n;
+	}
+
 	private static final int MELEE_PER_LANE = 3;
 
-	private void spawnCreepsOnLane(ServerWorld world, DotaMap.CreepSpawn spawn) {
+	private void spawnCreepsOnLane(ServerWorld world, DotaMap.CreepSpawn spawn, int budget) {
+		if (budget <= 0) {
+			return;
+		}
 		boolean superMelee = hasSuperCreeps(spawn.team(), spawn.lane(), BarrackEntity.Kind.MELEE);
 		boolean superRanged = hasSuperCreeps(spawn.team(), spawn.lane(), BarrackEntity.Kind.RANGED);
 
@@ -689,7 +719,9 @@ public final class MatchManager {
 		LaneChunkLoader.ensureLoaded(world, spawnBase);
 		int spawnY = DotaMap.surfaceY(spawnBase.getX(), spawnBase.getZ()) + 1;
 
-		for (int i = 0; i < MELEE_PER_LANE; i++) {
+		int spawned = 0;
+		int meleeWanted = Math.min(MELEE_PER_LANE, budget);
+		for (int i = 0; i < meleeWanted; i++) {
 			CreepEntity creep = (superMelee ? ModEntities.SUPER_CREEP : ModEntities.CREEP).create(world);
 			if (creep == null) {
 				continue;
@@ -704,36 +736,39 @@ public final class MatchManager {
 				creep.setHealth((float) CreepEntity.MELEE_HP);
 			}
 			world.spawnEntity(creep);
+			spawned++;
 		}
-		RangedCreepEntity ranged = (superRanged ? ModEntities.SUPER_RANGED_CREEP : ModEntities.RANGED_CREEP).create(world);
-		if (ranged != null) {
-			// Ranged a bit behind melee (toward own base)
-			double bx = 0;
-			double bz = 0;
-			if (spawn.lane() == DotaMap.Lane.TOP) {
-				// Radiant base +Z of TOP; Dire base +X of TOP
-				bx = spawn.team() == DotaTeam.RADIANT ? 0 : 2.0;
-				bz = spawn.team() == DotaTeam.RADIANT ? 2.0 : 0;
-			} else if (spawn.lane() == DotaMap.Lane.BOT) {
-				// Radiant base −X of BOT; Dire base −Z of BOT
-				bx = spawn.team() == DotaTeam.RADIANT ? -2.0 : 0;
-				bz = spawn.team() == DotaTeam.RADIANT ? 0 : -2.0;
-			} else {
-				bx = spawn.team() == DotaTeam.RADIANT ? -1.5 : 1.5;
-				bz = spawn.team() == DotaTeam.RADIANT ? 1.5 : -1.5;
+		if (spawned < budget) {
+			RangedCreepEntity ranged = (superRanged ? ModEntities.SUPER_RANGED_CREEP : ModEntities.RANGED_CREEP).create(world);
+			if (ranged != null) {
+				// Ranged a bit behind melee (toward own base)
+				double bx = 0;
+				double bz = 0;
+				if (spawn.lane() == DotaMap.Lane.TOP) {
+					// Radiant base +Z of TOP; Dire base +X of TOP
+					bx = spawn.team() == DotaTeam.RADIANT ? 0 : 2.0;
+					bz = spawn.team() == DotaTeam.RADIANT ? 2.0 : 0;
+				} else if (spawn.lane() == DotaMap.Lane.BOT) {
+					// Radiant base −X of BOT; Dire base −Z of BOT
+					bx = spawn.team() == DotaTeam.RADIANT ? -2.0 : 0;
+					bz = spawn.team() == DotaTeam.RADIANT ? 0 : -2.0;
+				} else {
+					bx = spawn.team() == DotaTeam.RADIANT ? -1.5 : 1.5;
+					bz = spawn.team() == DotaTeam.RADIANT ? 1.5 : -1.5;
+				}
+				ranged.refreshPositionAndAngles(spawnBase.getX() + 0.5 + bx, spawnY, spawnBase.getZ() + 0.5 + bz, 0f, 0f);
+				ranged.setDotaTeam(spawn.team());
+				ranged.setLanePath(spawn.path());
+				if (superRanged) {
+					ranged.applySuperStats();
+				} else {
+					ranged.setHealth((float) RangedCreepEntity.RANGED_HP);
+				}
+				ranged.equipStack(net.minecraft.entity.EquipmentSlot.MAINHAND,
+						new net.minecraft.item.ItemStack(net.minecraft.item.Items.BOW));
+				ranged.setEquipmentDropChance(net.minecraft.entity.EquipmentSlot.MAINHAND, 0f);
+				world.spawnEntity(ranged);
 			}
-			ranged.refreshPositionAndAngles(spawnBase.getX() + 0.5 + bx, spawnY, spawnBase.getZ() + 0.5 + bz, 0f, 0f);
-			ranged.setDotaTeam(spawn.team());
-			ranged.setLanePath(spawn.path());
-			if (superRanged) {
-				ranged.applySuperStats();
-			} else {
-				ranged.setHealth((float) RangedCreepEntity.RANGED_HP);
-			}
-			ranged.equipStack(net.minecraft.entity.EquipmentSlot.MAINHAND,
-					new net.minecraft.item.ItemStack(net.minecraft.item.Items.BOW));
-			ranged.setEquipmentDropChance(net.minecraft.entity.EquipmentSlot.MAINHAND, 0f);
-			world.spawnEntity(ranged);
 		}
 	}
 

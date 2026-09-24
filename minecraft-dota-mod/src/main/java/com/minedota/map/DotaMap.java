@@ -234,30 +234,31 @@ public final class DotaMap {
 
 	public static List<CreepSpawn> creepSpawns() {
 		List<CreepSpawn> list = new ArrayList<>();
-		// Paths start near own T4 (actual spawn is computed from T4 in MatchManager)
-		list.add(new CreepSpawn(wp(-72, 45), lanePath(
-				-72, 45, -72, 20, -72, -10, -72, -40, -72, -55,
-				-40, -72, -10, -72, 25, -72, 48, -72, 55, -72, 70, -72, D_ANCIENT_X, D_ANCIENT_Z
+		// Side-lane waypoints at ±71 (path painted at ±70 halfW=2 → 68..72; towers at ±72).
+		// 1 block inward from tower line = dirt center, away from jungle trees.
+		list.add(new CreepSpawn(wp(-71, 45), lanePath(
+				-71, 45, -71, 20, -71, -10, -71, -40, -71, -55,
+				-40, -71, -10, -71, 25, -71, 48, -71, 55, -71, 70, -71, D_ANCIENT_X, D_ANCIENT_Z
 		), Lane.TOP, DotaTeam.RADIANT));
 		list.add(new CreepSpawn(wp(-50, 50), lanePath(
 				-50, 50, -40, 40, -25, 25, -10, 10, 0, 0,
 				10, -10, 25, -25, 40, -40, 55, -55, D_ANCIENT_X, D_ANCIENT_Z
 		), Lane.MID, DotaTeam.RADIANT));
-		list.add(new CreepSpawn(wp(-45, 72), lanePath(
-				-45, 72, -20, 72, 10, 72, 40, 72, 55, 72,
-				72, 40, 72, 10, 72, -20, 72, -48, 72, -55, D_ANCIENT_X, D_ANCIENT_Z
+		list.add(new CreepSpawn(wp(-45, 71), lanePath(
+				-45, 71, -20, 71, 10, 71, 40, 71, 55, 71,
+				71, 40, 71, 10, 71, -20, 71, -48, 71, -55, D_ANCIENT_X, D_ANCIENT_Z
 		), Lane.BOT, DotaTeam.RADIANT));
-		list.add(new CreepSpawn(wp(45, -72), lanePath(
-				45, -72, 20, -72, -10, -72, -40, -72, -55, -72,
-				-72, -40, -72, -10, -72, 20, -72, 48, -72, 55, R_ANCIENT_X, R_ANCIENT_Z
+		list.add(new CreepSpawn(wp(45, -71), lanePath(
+				45, -71, 20, -71, -10, -71, -40, -71, -55, -71,
+				-71, -40, -71, -10, -71, 20, -71, 48, -71, 55, R_ANCIENT_X, R_ANCIENT_Z
 		), Lane.TOP, DotaTeam.DIRE));
 		list.add(new CreepSpawn(wp(50, -50), lanePath(
 				50, -50, 40, -40, 25, -25, 10, -10, 0, 0,
 				-10, 10, -25, 25, -40, 40, -55, 55, R_ANCIENT_X, R_ANCIENT_Z
 		), Lane.MID, DotaTeam.DIRE));
-		list.add(new CreepSpawn(wp(72, -45), lanePath(
-				72, -45, 72, -20, 72, 10, 72, 40, 72, 55,
-				40, 72, 10, 72, -20, 72, -48, 72, -55, 72, R_ANCIENT_X, R_ANCIENT_Z
+		list.add(new CreepSpawn(wp(71, -45), lanePath(
+				71, -45, 71, -20, 71, 10, 71, 40, 71, 55,
+				40, 71, 10, 71, -20, 71, -48, 71, -55, 71, R_ANCIENT_X, R_ANCIENT_Z
 		), Lane.BOT, DotaTeam.DIRE));
 		return List.copyOf(list);
 	}
