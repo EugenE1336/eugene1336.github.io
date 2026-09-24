@@ -256,9 +256,6 @@ public final class MatchManager {
 		TeamComponent.setPlayerTeam(player, team);
 		player.changeGameMode(GameMode.ADVENTURE);
 
-		BlockPos pad = team == DotaTeam.RADIANT ? LobbyMap.BTN_RADIANT : LobbyMap.BTN_DIRE;
-		player.networkHandler.requestTeleport(pad.getX() + 0.5, LobbyMap.WALK_Y, pad.getZ() + 2.5, 180f, 0f);
-
 		broadcast(player.getServer(), Text.literal(player.getEntityName() + " → ")
 				.append(team.getDisplayName())
 				.append(Text.literal(" (лобби)").formatted(Formatting.GRAY)));
