@@ -10,6 +10,7 @@ import net.minecraft.util.math.Direction;
 
 /**
  * Lobby room south of the map (outside playable arena).
+ * Control buttons live on the north wall (eye-level), not on the floor.
  */
 public final class LobbyMap {
 	public static final int CENTER_X = 0;
@@ -17,27 +18,37 @@ public final class LobbyMap {
 	public static final int HALF = 9;
 	public static final int FLOOR_Y = DotaMap.FLOOR_Y;
 	public static final int WALK_Y = DotaMap.WALK_Y;
+	/** Button height on wall (standing eye level). */
+	public static final int BTN_Y = WALK_Y + 1;
 
 	public static final BlockPos SPAWN = new BlockPos(CENTER_X, WALK_Y, CENTER_Z + 3);
 
-	/** Clickable pads (floor block) and buttons on top. */
-	public static final BlockPos PAD_RADIANT = new BlockPos(CENTER_X - 5, FLOOR_Y - 1, CENTER_Z - 1);
-	public static final BlockPos PAD_DIRE = new BlockPos(CENTER_X + 5, FLOOR_Y - 1, CENTER_Z - 1);
-	public static final BlockPos PAD_START = new BlockPos(CENTER_X, FLOOR_Y - 1, CENTER_Z - 5);
-	public static final BlockPos PAD_HEROES = new BlockPos(CENTER_X, FLOOR_Y - 1, CENTER_Z + 5);
-	public static final BlockPos PAD_ADD_BOT = new BlockPos(CENTER_X - 5, FLOOR_Y - 1, CENTER_Z - 5);
+	/** North wall column Z (outer). Buttons sit one block south (inside). */
+	public static final int WALL_N_Z = CENTER_Z - HALF;
+	public static final int BTN_N_Z = WALL_N_Z + 1;
 
-	public static final BlockPos BTN_RADIANT = new BlockPos(CENTER_X - 5, FLOOR_Y, CENTER_Z - 1);
-	public static final BlockPos BTN_DIRE = new BlockPos(CENTER_X + 5, FLOOR_Y, CENTER_Z - 1);
-	public static final BlockPos BTN_START = new BlockPos(CENTER_X, FLOOR_Y, CENTER_Z - 5);
-	public static final BlockPos BTN_HEROES = new BlockPos(CENTER_X, FLOOR_Y, CENTER_Z + 5);
-	public static final BlockPos BTN_ADD_BOT = new BlockPos(CENTER_X - 5, FLOOR_Y, CENTER_Z - 5);
+	/**
+	 * Wall panel blocks (colored concrete in the north wall) + stone buttons in front.
+	 * L→R: Radiant | Heroes | Start | +Bot | Dire
+	 */
+	public static final BlockPos PAD_RADIANT = new BlockPos(CENTER_X - 4, BTN_Y, WALL_N_Z);
+	public static final BlockPos PAD_HEROES = new BlockPos(CENTER_X - 2, BTN_Y, WALL_N_Z);
+	public static final BlockPos PAD_START = new BlockPos(CENTER_X, BTN_Y, WALL_N_Z);
+	public static final BlockPos PAD_ADD_BOT = new BlockPos(CENTER_X + 2, BTN_Y, WALL_N_Z);
+	public static final BlockPos PAD_DIRE = new BlockPos(CENTER_X + 4, BTN_Y, WALL_N_Z);
 
-	public static final BlockPos LABEL_RADIANT = new BlockPos(CENTER_X - 5, FLOOR_Y + 1, CENTER_Z - 1);
-	public static final BlockPos LABEL_DIRE = new BlockPos(CENTER_X + 5, FLOOR_Y + 1, CENTER_Z - 1);
-	public static final BlockPos LABEL_START = new BlockPos(CENTER_X, FLOOR_Y + 1, CENTER_Z - 5);
-	public static final BlockPos LABEL_HEROES = new BlockPos(CENTER_X, FLOOR_Y + 1, CENTER_Z + 5);
-	public static final BlockPos LABEL_ADD_BOT = new BlockPos(CENTER_X - 5, FLOOR_Y + 1, CENTER_Z - 5);
+	public static final BlockPos BTN_RADIANT = new BlockPos(CENTER_X - 4, BTN_Y, BTN_N_Z);
+	public static final BlockPos BTN_HEROES = new BlockPos(CENTER_X - 2, BTN_Y, BTN_N_Z);
+	public static final BlockPos BTN_START = new BlockPos(CENTER_X, BTN_Y, BTN_N_Z);
+	public static final BlockPos BTN_ADD_BOT = new BlockPos(CENTER_X + 2, BTN_Y, BTN_N_Z);
+	public static final BlockPos BTN_DIRE = new BlockPos(CENTER_X + 4, BTN_Y, BTN_N_Z);
+
+	public static final BlockPos LABEL_RADIANT = new BlockPos(CENTER_X - 4, BTN_Y + 1, BTN_N_Z);
+	public static final BlockPos LABEL_HEROES = new BlockPos(CENTER_X - 2, BTN_Y + 1, BTN_N_Z);
+	public static final BlockPos LABEL_START = new BlockPos(CENTER_X, BTN_Y + 1, BTN_N_Z);
+	public static final BlockPos LABEL_ADD_BOT = new BlockPos(CENTER_X + 2, BTN_Y + 1, BTN_N_Z);
+	public static final BlockPos LABEL_DIRE = new BlockPos(CENTER_X + 4, BTN_Y + 1, BTN_N_Z);
+
 	/** History board east wall of lobby. */
 	public static final BlockPos HISTORY_HEADER = new BlockPos(CENTER_X + HALF - 1, FLOOR_Y + 3, CENTER_Z);
 	public static final BlockPos HISTORY_FIRST = new BlockPos(CENTER_X + HALF - 1, FLOOR_Y + 2, CENTER_Z);
@@ -62,21 +73,25 @@ public final class LobbyMap {
 
 	public static LobbyAction actionAt(BlockPos pos) {
 		int x = pos.getX();
+		int y = pos.getY();
 		int z = pos.getZ();
-		if (x == BTN_RADIANT.getX() && z == BTN_RADIANT.getZ()) {
-			return LobbyAction.RADIANT;
-		}
-		if (x == BTN_DIRE.getX() && z == BTN_DIRE.getZ()) {
-			return LobbyAction.DIRE;
-		}
-		if (x == BTN_START.getX() && z == BTN_START.getZ()) {
-			return LobbyAction.START;
-		}
-		if (x == BTN_HEROES.getX() && z == BTN_HEROES.getZ()) {
-			return LobbyAction.HEROES;
-		}
-		if (x == BTN_ADD_BOT.getX() && z == BTN_ADD_BOT.getZ()) {
-			return LobbyAction.ADD_BOT;
+		// Wall buttons / pads: match by xz (unique on north wall); accept pad or button y
+		if (z == BTN_N_Z || z == WALL_N_Z) {
+			if (x == BTN_RADIANT.getX() && (y == BTN_Y || y == BTN_Y + 1)) {
+				return LobbyAction.RADIANT;
+			}
+			if (x == BTN_DIRE.getX() && (y == BTN_Y || y == BTN_Y + 1)) {
+				return LobbyAction.DIRE;
+			}
+			if (x == BTN_START.getX() && (y == BTN_Y || y == BTN_Y + 1)) {
+				return LobbyAction.START;
+			}
+			if (x == BTN_HEROES.getX() && (y == BTN_Y || y == BTN_Y + 1)) {
+				return LobbyAction.HEROES;
+			}
+			if (x == BTN_ADD_BOT.getX() && (y == BTN_Y || y == BTN_Y + 1)) {
+				return LobbyAction.ADD_BOT;
+			}
 		}
 		return LobbyAction.NONE;
 	}
@@ -100,31 +115,35 @@ public final class LobbyMap {
 			return Blocks.STONE.getDefaultState();
 		}
 		if (y == FLOOR_Y - 1) {
-			if (x == PAD_RADIANT.getX() && z == PAD_RADIANT.getZ()) {
-				return Blocks.LIME_CONCRETE.getDefaultState();
-			}
-			if (x == PAD_DIRE.getX() && z == PAD_DIRE.getZ()) {
-				return Blocks.RED_CONCRETE.getDefaultState();
-			}
-			if (x == PAD_START.getX() && z == PAD_START.getZ()) {
-				return Blocks.GOLD_BLOCK.getDefaultState();
-			}
-			if (x == PAD_HEROES.getX() && z == PAD_HEROES.getZ()) {
-				return Blocks.PURPLE_CONCRETE.getDefaultState();
-			}
-			if (x == PAD_ADD_BOT.getX() && z == PAD_ADD_BOT.getZ()) {
-				return Blocks.CYAN_CONCRETE.getDefaultState();
-			}
 			if (wall) {
 				return Blocks.POLISHED_ANDESITE.getDefaultState();
 			}
 			return Blocks.SMOOTH_QUARTZ.getDefaultState();
 		}
+
+		// North-wall control panel (colored concrete + buttons in front)
+		if (z == WALL_N_Z && y == BTN_Y) {
+			BlockState panel = wallPanelAt(x);
+			if (panel != null) {
+				return panel;
+			}
+		}
+		if (z == BTN_N_Z && y == BTN_Y && isControlX(x)) {
+			return wallButton(Direction.SOUTH);
+		}
+
 		if (y >= WALK_Y && y <= WALK_Y + 3) {
 			if (wall) {
 				// doorway on +Z side
 				if (lz == HALF && Math.abs(lx) <= 1 && y <= WALK_Y + 2) {
 					return Blocks.AIR.getDefaultState();
+				}
+				// Keep panel columns solid concrete instead of glass
+				if (z == WALL_N_Z && y == BTN_Y && isControlX(x)) {
+					BlockState panel = wallPanelAt(x);
+					if (panel != null) {
+						return panel;
+					}
 				}
 				if (y == WALK_Y + 3) {
 					return Blocks.GLASS.getDefaultState();
@@ -135,32 +154,37 @@ public final class LobbyMap {
 		if (y == WALK_Y + 4) {
 			return Blocks.SMOOTH_QUARTZ.getDefaultState();
 		}
-
-		// Floor buttons
-		if (y == FLOOR_Y) {
-			if (x == BTN_RADIANT.getX() && z == BTN_RADIANT.getZ()) {
-				return floorButton();
-			}
-			if (x == BTN_DIRE.getX() && z == BTN_DIRE.getZ()) {
-				return floorButton();
-			}
-			if (x == BTN_START.getX() && z == BTN_START.getZ()) {
-				return floorButton();
-			}
-			if (x == BTN_HEROES.getX() && z == BTN_HEROES.getZ()) {
-				return floorButton();
-			}
-			if (x == BTN_ADD_BOT.getX() && z == BTN_ADD_BOT.getZ()) {
-				return floorButton();
-			}
-		}
 		return Blocks.AIR.getDefaultState();
 	}
 
-	private static BlockState floorButton() {
+	private static boolean isControlX(int x) {
+		return x == PAD_RADIANT.getX() || x == PAD_HEROES.getX() || x == PAD_START.getX()
+				|| x == PAD_ADD_BOT.getX() || x == PAD_DIRE.getX();
+	}
+
+	private static BlockState wallPanelAt(int x) {
+		if (x == PAD_RADIANT.getX()) {
+			return Blocks.LIME_CONCRETE.getDefaultState();
+		}
+		if (x == PAD_DIRE.getX()) {
+			return Blocks.RED_CONCRETE.getDefaultState();
+		}
+		if (x == PAD_START.getX()) {
+			return Blocks.GOLD_BLOCK.getDefaultState();
+		}
+		if (x == PAD_HEROES.getX()) {
+			return Blocks.PURPLE_CONCRETE.getDefaultState();
+		}
+		if (x == PAD_ADD_BOT.getX()) {
+			return Blocks.CYAN_CONCRETE.getDefaultState();
+		}
+		return null;
+	}
+
+	public static BlockState wallButton(Direction facing) {
 		return Blocks.STONE_BUTTON.getDefaultState()
-				.with(WallMountedBlock.FACE, WallMountLocation.FLOOR)
-				.with(WallMountedBlock.FACING, Direction.NORTH);
+				.with(WallMountedBlock.FACE, WallMountLocation.WALL)
+				.with(WallMountedBlock.FACING, facing);
 	}
 
 	public enum LobbyAction {

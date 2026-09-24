@@ -4,8 +4,6 @@ import com.minedota.MineDota;
 import com.minedota.match.MatchRecord;
 import com.minedota.worldgen.DotaWorldState;
 import net.minecraft.block.Blocks;
-import net.minecraft.block.WallMountedBlock;
-import net.minecraft.block.enums.WallMountLocation;
 import net.minecraft.entity.decoration.ArmorStandEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
@@ -23,8 +21,8 @@ public final class LobbySetup {
 	}
 
 	public static void ensureLabels(ServerWorld world) {
-		ensureHeroPad(world);
-		ensureAddBotPad(world);
+		placeWallControls(world);
+		clearOldFloorControls(world);
 
 		spawnLabel(world, LobbyMap.LABEL_RADIANT, Text.literal("[ Radiant ]").formatted(Formatting.GREEN, Formatting.BOLD));
 		spawnLabel(world, LobbyMap.LABEL_DIRE, Text.literal("[ Dire ]").formatted(Formatting.RED, Formatting.BOLD));
@@ -38,7 +36,48 @@ public final class LobbySetup {
 					Text.literal("Сторона → Герой / +Bot → Start").formatted(Formatting.YELLOW));
 		}
 		refreshMatchHistory(world);
-		MineDota.LOGGER.info("Lobby labels ready");
+		MineDota.LOGGER.info("Lobby wall controls ready");
+	}
+
+	/** North-wall panel: colored blocks + stone buttons facing into the room. */
+	private static void placeWallControls(ServerWorld world) {
+		placeOne(world, LobbyMap.PAD_RADIANT, Blocks.LIME_CONCRETE.getDefaultState(), LobbyMap.BTN_RADIANT);
+		placeOne(world, LobbyMap.PAD_HEROES, Blocks.PURPLE_CONCRETE.getDefaultState(), LobbyMap.BTN_HEROES);
+		placeOne(world, LobbyMap.PAD_START, Blocks.GOLD_BLOCK.getDefaultState(), LobbyMap.BTN_START);
+		placeOne(world, LobbyMap.PAD_ADD_BOT, Blocks.CYAN_CONCRETE.getDefaultState(), LobbyMap.BTN_ADD_BOT);
+		placeOne(world, LobbyMap.PAD_DIRE, Blocks.RED_CONCRETE.getDefaultState(), LobbyMap.BTN_DIRE);
+	}
+
+	private static void placeOne(ServerWorld world, BlockPos pad, net.minecraft.block.BlockState panel, BlockPos btn) {
+		world.setBlockState(pad, panel);
+		world.setBlockState(btn, LobbyMap.wallButton(Direction.SOUTH));
+	}
+
+	/** Remove leftover floor pads/buttons from older lobby layout. */
+	private static void clearOldFloorControls(ServerWorld world) {
+		int fy = LobbyMap.FLOOR_Y;
+		int[][] old = {
+				{LobbyMap.CENTER_X - 5, LobbyMap.CENTER_Z - 1},
+				{LobbyMap.CENTER_X + 5, LobbyMap.CENTER_Z - 1},
+				{LobbyMap.CENTER_X, LobbyMap.CENTER_Z - 5},
+				{LobbyMap.CENTER_X, LobbyMap.CENTER_Z + 5},
+				{LobbyMap.CENTER_X - 5, LobbyMap.CENTER_Z - 5},
+		};
+		for (int[] xz : old) {
+			BlockPos floor = new BlockPos(xz[0], fy - 1, xz[1]);
+			BlockPos btn = new BlockPos(xz[0], fy, xz[1]);
+			BlockPos label = new BlockPos(xz[0], fy + 1, xz[1]);
+			if (!LobbyMap.isLobbyButton(floor) && !LobbyMap.isLobbyButton(btn)) {
+				world.setBlockState(floor, Blocks.SMOOTH_QUARTZ.getDefaultState());
+				world.setBlockState(btn, Blocks.AIR.getDefaultState());
+			}
+			// Drop orphan floor labels
+			for (ArmorStandEntity stand : world.getEntitiesByClass(ArmorStandEntity.class, new Box(label).expand(0.8),
+					e -> e.getCommandTags().contains("minedota_lobby_label")
+							&& !e.getCommandTags().contains(HISTORY_TAG))) {
+				stand.discard();
+			}
+		}
 	}
 
 	public static void refreshMatchHistory(ServerWorld world) {
@@ -79,20 +118,6 @@ public final class LobbySetup {
 		stand.addCommandTag(HISTORY_TAG);
 		stand.addCommandTag("minedota_lobby_label");
 		world.spawnEntity(stand);
-	}
-
-	private static void ensureHeroPad(ServerWorld world) {
-		world.setBlockState(LobbyMap.PAD_HEROES, Blocks.PURPLE_CONCRETE.getDefaultState());
-		world.setBlockState(LobbyMap.BTN_HEROES, Blocks.STONE_BUTTON.getDefaultState()
-				.with(WallMountedBlock.FACE, WallMountLocation.FLOOR)
-				.with(WallMountedBlock.FACING, Direction.NORTH));
-	}
-
-	private static void ensureAddBotPad(ServerWorld world) {
-		world.setBlockState(LobbyMap.PAD_ADD_BOT, Blocks.CYAN_CONCRETE.getDefaultState());
-		world.setBlockState(LobbyMap.BTN_ADD_BOT, Blocks.STONE_BUTTON.getDefaultState()
-				.with(WallMountedBlock.FACE, WallMountLocation.FLOOR)
-				.with(WallMountedBlock.FACING, Direction.NORTH));
 	}
 
 	private static void spawnLabel(ServerWorld world, BlockPos pos, Text name) {
