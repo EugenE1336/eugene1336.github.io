@@ -1,0 +1,15 @@
+{
+  "item.minedota.staff_of_power": "Посох Силы",
+  "item.minedota.tango": "Tango",
+  "entity.minedota.creep": "Крип",
+  "entity.minedota.tower": "Башня",
+  "entity.minedota.ancient": "Ancient",
+  "itemGroup.minedota": "MineDota",
+  "generator.minedota.dota": "Карта Dota",
+  "world.preset.minedota.dota2": "Dota 2",
+  "key.minedota.ability_q": "Способность Q",
+  "key.minedota.ability_w": "Способность W",
+  "key.minedota.ability_e": "Способность E",
+  "key.minedota.ability_r": "Ульт R",
+  "category.minedota": "MineDota"
+}

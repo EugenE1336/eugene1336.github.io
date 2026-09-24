@@ -1,0 +1,20 @@
+{
+  "required": true,
+  "package": "com.minedota.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "mixins": [
+    "LivingEntityArmorMixin",
+    "PlayerKeepInventoryMixin",
+    "ProjectileAllyPassMixin",
+    "NoHeroKnockbackMixin"
+  ],
+  "client": [
+    "PlayerEntityRendererMixin",
+    "InGameHudMixin",
+    "MinecraftClientAttackMixin",
+    "NoHurtCamMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

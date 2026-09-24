@@ -1,0 +1,15 @@
+{
+  "item.minedota.staff_of_power": "Staff of Power",
+  "item.minedota.tango": "Tango",
+  "entity.minedota.creep": "Creep",
+  "entity.minedota.tower": "Tower",
+  "entity.minedota.ancient": "Ancient",
+  "itemGroup.minedota": "MineDota",
+  "generator.minedota.dota": "Dota Map",
+  "world.preset.minedota.dota2": "Dota 2",
+  "key.minedota.ability_q": "Ability Q",
+  "key.minedota.ability_w": "Ability W",
+  "key.minedota.ability_e": "Ability E",
+  "key.minedota.ability_r": "Ability R (Ultimate)",
+  "category.minedota": "MineDota"
+}
