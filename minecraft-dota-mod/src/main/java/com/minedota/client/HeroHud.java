@@ -186,10 +186,10 @@ public final class HeroHud {
 			context.drawTextWithShadow(mc.textRenderer, rs, sw / 2 - tw / 2, sh / 2 - 40, 0xFFFF4444);
 		}
 
-		// Left of hotbar — chat sits bottom-left upward; keep skills clear of message stream
+		// Right of hotbar — leave bottom-left for chat
 		int totalW = 4 * 48 + 3 * 4;
-		int hotbarLeft = sw / 2 - 91;
-		int startX = Math.max(8, hotbarLeft - totalW - 10);
+		int hotbarRight = sw / 2 + 91;
+		int startX = Math.min(sw - totalW - 8, hotbarRight + 10);
 		int baseY = sh - 66;
 
 		String nameLine = hero.name() + (attackCd > 0 ? "  ATK " + ((attackCd + 19) / 20) + "с" : "");
