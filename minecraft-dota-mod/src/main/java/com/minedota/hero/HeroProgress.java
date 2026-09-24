@@ -274,8 +274,16 @@ public final class HeroProgress {
 		if (rank <= 0) {
 			return 0f;
 		}
-		float rankMult = 0.75f + 0.25f * rank;
-		float p = base.power() * rankMult * getSpellAmp(hero);
+		float p;
+		// Tiny Avalanche / Toss: +50% of base power per rank after 1 (10 → 15 → 20 → 25)
+		if ("tiny".equals(hero.id())
+				&& ("avalanche".equals(base.id()) || "toss".equals(base.id()))) {
+			p = base.power() * (1f + 0.5f * (rank - 1));
+		} else {
+			float rankMult = 0.75f + 0.25f * rank;
+			p = base.power() * rankMult;
+		}
+		p *= getSpellAmp(hero);
 		// Tiny Grow: +10% to Q/W per ult rank
 		if ("tiny".equals(hero.id()) && (slot == AbilitySlot.Q || slot == AbilitySlot.W)) {
 			p *= 1f + 0.10f * getRank(AbilitySlot.R);
@@ -285,6 +293,25 @@ public final class HeroProgress {
 
 	public float scaledAbilityHeal(AbilityDef base, AbilitySlot slot, HeroDef hero) {
 		return scaledAbilityPower(base, slot, hero);
+	}
+
+	/**
+	 * Cooldown in ticks at current rank.
+	 * Tiny actives: −1s per ability rank after 1 (min 1s).
+	 */
+	public int effectiveCooldownTicks(AbilityDef base, AbilitySlot slot, HeroDef hero) {
+		int cd = Math.max(0, base.cooldownTicks());
+		if (cd <= 0) {
+			return 0;
+		}
+		int rank = getRank(slot);
+		if (rank <= 0) {
+			return cd;
+		}
+		if ("tiny".equals(hero.id()) && base.type() != AbilityDef.EffectType.PASSIVE) {
+			cd -= (rank - 1) * 20;
+		}
+		return Math.max(20, cd);
 	}
 
 	private static float hpGain(HeroAttribute attr) {

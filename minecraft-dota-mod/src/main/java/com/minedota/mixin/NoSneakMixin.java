@@ -7,7 +7,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Disable crouch (Shift) in Dota lobby / match — upgrade uses Ctrl+ability. */
+/** Disable crouch (Shift) in Dota — Ctrl is reserved for ability upgrade. */
 @Mixin(KeyboardInput.class)
 public class NoSneakMixin {
 

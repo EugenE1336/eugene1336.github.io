@@ -177,7 +177,7 @@ public final class HeroManager {
 		}
 		// Grab keeps charges (no CD); throw or normal cast starts CD
 		if (!"TREE_GRAB_OK".equals(err)) {
-			cds[idx] = ab.cooldownTicks();
+			cds[idx] = prog.effectiveCooldownTicks(ab, slot, def);
 		}
 		syncState(player);
 		if ("TREE_THROW_OK".equals(err)) {
@@ -194,11 +194,13 @@ public final class HeroManager {
 		if (def == null) {
 			return;
 		}
+		HeroProgress prog = ensureProgress(player.getUuid());
 		AbilityDef ab = def.ability(AbilitySlot.E);
 		int[] cds = cooldowns.computeIfAbsent(player.getUuid(), u -> new int[]{0, 0, 0, 0});
-		cds[AbilitySlot.E.getIndex()] = ab.cooldownTicks();
+		int cd = prog.effectiveCooldownTicks(ab, AbilitySlot.E, def);
+		cds[AbilitySlot.E.getIndex()] = cd;
 		syncState(player);
-		player.sendMessage(Text.literal("Tree Grab: КД " + (ab.cooldownTicks() / 20) + "с")
+		player.sendMessage(Text.literal("Tree Grab: КД " + (cd / 20) + "с")
 				.formatted(Formatting.GRAY), true);
 	}
 
