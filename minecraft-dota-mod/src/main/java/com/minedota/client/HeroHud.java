@@ -216,6 +216,18 @@ public final class HeroHud {
 			String keyLabel = ClientNetworking.abilityKeyLabel(i);
 			context.drawTextWithShadow(mc.textRenderer, keyLabel, x + 3, y + 2, 0xFFFFFF);
 
+			boolean canUp = canUpgradeSlot(slot);
+			if (canUp) {
+				// Green rim + "+" right of hotkey, top of icon
+				context.fill(x, y, x + 48, y + 2, 0xFF55FF55);
+				context.fill(x, y + 26, x + 48, y + 28, 0xFF55FF55);
+				context.fill(x, y, x + 2, y + 28, 0xFF55FF55);
+				context.fill(x + 46, y, x + 48, y + 28, 0xFF55FF55);
+				int keyW = mc.textRenderer.getWidth(keyLabel);
+				int plusX = x + 3 + keyW + 3;
+				context.drawTextWithShadow(mc.textRenderer, "+", plusX, y + 1, 0xFF66FF66);
+			}
+
 			var matrices = context.getMatrices();
 			matrices.push();
 			matrices.translate(x + 3, y + 12, 0);
@@ -237,6 +249,11 @@ public final class HeroHud {
 				String cdSec = String.valueOf(Math.max(1, secLeft));
 				int tw = mc.textRenderer.getWidth(cdSec);
 				context.drawTextWithShadow(mc.textRenderer, cdSec, x + 24 - tw / 2, y + 10, 0xFFFFFF);
+				if (canUp) {
+					// Keep upgrade hint visible over CD veil
+					int keyW = mc.textRenderer.getWidth(keyLabel);
+					context.drawTextWithShadow(mc.textRenderer, "+", x + 3 + keyW + 3, y + 1, 0xFF66FF66);
+				}
 			} else if (treeGrabHits > 0 && "tree_grab".equals(ab.id())) {
 				String hits = String.valueOf(treeGrabHits);
 				int tw = mc.textRenderer.getWidth(hits);
@@ -249,8 +266,31 @@ public final class HeroHud {
 			String k1 = ClientNetworking.abilityKeyLabel(1);
 			String k2 = ClientNetworking.abilityKeyLabel(2);
 			String k3 = ClientNetworking.abilityKeyLabel(3);
-			String hint = "Ctrl+" + k0 + "/" + k1 + "/" + k2 + "/" + k3 + " — апгрейд";
+			String hint = "Ctrl+" + k0 + "/" + k1 + "/" + k2 + "/" + k3 + " — апгрейд (+)";
 			context.drawTextWithShadow(mc.textRenderer, hint, startX, baseY - 24, 0xFFFFFF55);
 		}
+	}
+
+	/** Same unlock rules as HeroProgress.tryUpgrade (client preview). */
+	private static boolean canUpgradeSlot(AbilitySlot slot) {
+		if (skillPoints <= 0) {
+			return false;
+		}
+		String phase = ClientHeroData.getPhase();
+		if (!"IN_GAME".equals(phase) && !"SHOP".equals(phase)) {
+			return false;
+		}
+		int idx = slot.getIndex();
+		int max = slot == AbilitySlot.R
+				? com.minedota.hero.ProgressionConstants.MAX_RANK_ULT
+				: com.minedota.hero.ProgressionConstants.MAX_RANK_BASIC;
+		if (RANKS[idx] >= max) {
+			return false;
+		}
+		int nextRank = RANKS[idx] + 1;
+		if (slot == AbilitySlot.R) {
+			return level >= com.minedota.hero.ProgressionConstants.ULT_LEVEL_REQ[nextRank];
+		}
+		return level >= com.minedota.hero.ProgressionConstants.BASIC_LEVEL_REQ[nextRank];
 	}
 }
