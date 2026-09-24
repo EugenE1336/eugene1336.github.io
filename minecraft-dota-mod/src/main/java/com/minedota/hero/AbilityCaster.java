@@ -1,5 +1,8 @@
 package com.minedota.hero;
 
+import com.minedota.entity.AncientEntity;
+import com.minedota.entity.BarrackEntity;
+import com.minedota.entity.TowerEntity;
 import com.minedota.map.DotaMap;
 import com.minedota.map.DotaTrees;
 import com.minedota.team.DotaTeam;
@@ -92,12 +95,12 @@ public final class AbilityCaster {
 		return null;
 	}
 
-	/** Toss: nearest ≤1 block → lift 5+(rank-1)*2, damage on land. */
+	/** Toss: nearest ≤1 block → lift 5+(rank-1)*2, damage on land. Not towers/barracks/ancient. */
 	private static String castToss(ServerPlayerEntity player, DotaTeam team, AbilityDef ab, float power, int rank) {
 		float range = ab.radius() > 0 ? ab.radius() : 1f;
-		LivingEntity target = nearestEnemy(player.getServerWorld(), player, team, range);
+		LivingEntity target = nearestTossable(player.getServerWorld(), player, team, range);
 		if (target == null) {
-			return "Нет врага в радиусе 1 блока.";
+			return "Нет врага в радиусе 1 блока (строения Toss не берёт).";
 		}
 		double lift = 5.0 + Math.max(0, rank - 1) * 2.0;
 		AbilityRuntime.startToss(target, power, lift, team);
@@ -155,15 +158,18 @@ public final class AbilityCaster {
 		ServerWorld world = player.getServerWorld();
 		DotaTeam team = TeamComponent.getTeam(player);
 		final double throwRange = 10.0;
-		final float aoe = 2.0f;
+		final float aoe = 2.5f;
 		Vec3d flat = AbilityGeometry.lookFlat(player);
 		double destX = player.getX() + flat.x * throwRange;
 		double destZ = player.getZ() + flat.z * throwRange;
-		Double landY = findBlinkLandingY(world, destX, destZ, player.getY());
-		if (landY == null) {
-			// Still throw to air point at player height if blocked
-			landY = player.getY();
-		}
+		int bx = MathHelper.floor(destX);
+		int bz = MathHelper.floor(destZ);
+		// Prefer real world top over theoretical map surface (trees/highground drift)
+		int worldTop = world.getTopY(net.minecraft.world.Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, bx, bz);
+		double landY = worldTop > world.getBottomY() ? worldTop : (DotaMap.surfaceY(bx, bz) + 1.0);
+		// Tall column so height mismatch with map/trees still hits lane units
+		double yMin = Math.min(player.getY(), landY) - 2.0;
+		double yMax = Math.max(player.getY(), landY) + 4.0;
 		Vec3d impact = new Vec3d(destX, landY + 0.5, destZ);
 
 		// Trail particles
@@ -177,13 +183,25 @@ public final class AbilityCaster {
 			world.spawnParticles(ParticleTypes.CRIT, p.x, p.y, p.z, 1, 0.05, 0.05, 0.05, 0.0);
 		}
 
-		float dmg = prog.getAttackDamage(hero) * (0.85f + 0.15f * Math.max(1, rank));
-		Box box = new Box(impact.x - aoe, impact.y - aoe, impact.z - aoe,
-				impact.x + aoe, impact.y + aoe + 1.5, impact.z + aoe);
+		float raw = Math.max(1f, prog.getAttackDamage(hero) * (0.85f + 0.15f * Math.max(1, rank)));
+		Box box = new Box(impact.x - aoe, yMin, impact.z - aoe, impact.x + aoe, yMax, impact.z + aoe);
 		int hitCount = 0;
 		for (LivingEntity e : world.getEntitiesByClass(LivingEntity.class, box,
 				ent -> isEnemy(ent, player, team))) {
-			e.damage(world.getDamageSources().playerAttack(player), dmg);
+			HeroProgress tProg = null;
+			HeroDef tDef = null;
+			if (e instanceof ServerPlayerEntity tp) {
+				HeroManager hm = HeroManager.get(player.getServer());
+				tProg = hm.getProgress(tp.getUuid());
+				tDef = hm.getHero(tp.getUuid());
+			}
+			float dmg = CombatMath.mitigateAgainst(e, raw, tProg, tDef);
+			e.timeUntilRegen = 0;
+			boolean ok = e.damage(world.getDamageSources().playerAttack(player), dmg);
+			if (!ok && e.isAlive()) {
+				// Fallback if playerAttack cancelled (i-frames / gamemode edge)
+				e.damage(world.getDamageSources().magic(), dmg);
+			}
 			hitCount++;
 		}
 
@@ -196,7 +214,7 @@ public final class AbilityCaster {
 
 		prog.clearTreeGrab();
 		player.sendMessage(net.minecraft.text.Text.literal(
-				"Tree Grab: бросок 10 бл., AoE 2 — попало " + hitCount), true);
+				"Tree Grab: бросок 10 бл., AoE — попало " + hitCount + " (−" + String.format("%.0f", raw) + ")"), true);
 		return "TREE_THROW_OK";
 	}
 
@@ -527,6 +545,27 @@ public final class AbilityCaster {
 			}
 		}
 		return best;
+	}
+
+	/** Nearest enemy that Toss may lift (creeps / heroes / bots — not buildings). */
+	private static LivingEntity nearestTossable(ServerWorld world, ServerPlayerEntity player, DotaTeam team, float radius) {
+		LivingEntity best = null;
+		double bestDist = Double.MAX_VALUE;
+		for (LivingEntity e : enemies(world, player, team, radius)) {
+			if (isStructure(e)) {
+				continue;
+			}
+			double d = e.squaredDistanceTo(player);
+			if (d < bestDist) {
+				bestDist = d;
+				best = e;
+			}
+		}
+		return best;
+	}
+
+	private static boolean isStructure(LivingEntity e) {
+		return e instanceof TowerEntity || e instanceof BarrackEntity || e instanceof AncientEntity;
 	}
 
 	private static boolean isEnemy(LivingEntity e, ServerPlayerEntity player, DotaTeam team) {

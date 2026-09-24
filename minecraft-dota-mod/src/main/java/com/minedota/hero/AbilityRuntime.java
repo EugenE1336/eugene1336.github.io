@@ -46,6 +46,12 @@ public final class AbilityRuntime {
 	}
 
 	public static void startToss(LivingEntity target, float damage, double lift, DotaTeam casterTeam) {
+		// Buildings are not tossable (towers / barracks / ancient)
+		if (target instanceof com.minedota.entity.TowerEntity
+				|| target instanceof com.minedota.entity.BarrackEntity
+				|| target instanceof com.minedota.entity.AncientEntity) {
+			return;
+		}
 		int floorY = (int) Math.floor(target.getY());
 		double x = target.getX();
 		double z = target.getZ();
