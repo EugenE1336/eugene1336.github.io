@@ -32,7 +32,8 @@ public final class DotaTrees {
 		for (int y = minY; y <= minY + 8; y++) {
 			BlockPos p = new BlockPos(tx, y, tz);
 			if (isLog(world.getBlockState(p))) {
-				world.breakBlock(p, false, playerOrNull);
+				// setBlockState — без звука ломания на каждый блок (иначе оглушительный стек)
+				world.setBlockState(p, Blocks.AIR.getDefaultState(), 3);
 				maxTrunkY = y;
 			}
 		}
@@ -42,11 +43,12 @@ public final class DotaTrees {
 				new BlockPos(tx - leafR, minY, tz - leafR),
 				new BlockPos(tx + leafR, leafTop, tz + leafR))) {
 			if (isLeaves(world.getBlockState(p))) {
-				world.breakBlock(p, false, playerOrNull);
+				world.setBlockState(p, Blocks.AIR.getDefaultState(), 3);
 			}
 		}
-		world.playSound(null, trunk, SoundEvents.BLOCK_GRASS_BREAK, SoundCategory.BLOCKS, 1.0f, 1.0f);
-		world.playSound(null, trunk, SoundEvents.ENTITY_GENERIC_EAT, SoundCategory.PLAYERS, 0.6f, 1.2f);
+		// Один тихий звук «съел дерево» (мастер 2% не должен орать)
+		world.playSound(null, trunk, SoundEvents.ENTITY_GENERIC_EAT, SoundCategory.PLAYERS, 0.08f, 1.25f);
+		world.playSound(null, trunk, SoundEvents.BLOCK_GRASS_BREAK, SoundCategory.BLOCKS, 0.06f, 1.15f);
 		return true;
 	}
 

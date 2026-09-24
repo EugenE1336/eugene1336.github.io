@@ -190,9 +190,9 @@ public final class AbilityCaster {
 		world.spawnParticles(ParticleTypes.EXPLOSION, impact.x, impact.y, impact.z, 1, 0, 0, 0, 0);
 		world.spawnParticles(ParticleTypes.SWEEP_ATTACK, impact.x, impact.y + 0.5, impact.z, 12, 0.8, 0.3, 0.8, 0.02);
 		world.playSound(null, impact.x, impact.y, impact.z,
-				SoundEvents.ENTITY_GENERIC_EXPLODE, SoundCategory.PLAYERS, 0.7f, 1.3f);
+				SoundEvents.ENTITY_GENERIC_EXPLODE, SoundCategory.PLAYERS, 0.25f, 1.3f);
 		world.playSound(null, impact.x, impact.y, impact.z,
-				SoundEvents.BLOCK_WOOD_BREAK, SoundCategory.PLAYERS, 1.2f, 0.7f);
+				SoundEvents.BLOCK_WOOD_BREAK, SoundCategory.PLAYERS, 0.2f, 0.7f);
 
 		prog.clearTreeGrab();
 		player.sendMessage(net.minecraft.text.Text.literal(
