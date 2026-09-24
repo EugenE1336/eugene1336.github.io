@@ -168,11 +168,12 @@ public class RangedCreepEntity extends SkeletonEntity implements TeamComponent.T
 
 	@Override
 	public boolean isPushable() {
-		return false;
+		return true;
 	}
 
 	@Override
 	protected void pushAway(net.minecraft.entity.Entity entity) {
+		CreepSeparation.pushAwayIfCreep(this, entity);
 	}
 
 	@Override
@@ -181,6 +182,7 @@ public class RangedCreepEntity extends SkeletonEntity implements TeamComponent.T
 		if (this.getWorld().isClient || !this.isAlive()) {
 			return;
 		}
+		CreepSeparation.tick(this);
 		if (this.age % 5 == 0) {
 			refreshNameplate();
 		}

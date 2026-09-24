@@ -14,7 +14,8 @@
     "MinecraftClientAttackMixin",
     "NoHurtCamMixin",
     "NoSneakMixin",
-    "ChatHudWidthMixin"
+    "ChatHudWidthMixin",
+    "PlayerListHudMixin"
   ],
   "injectors": {
     "defaultRequire": 1

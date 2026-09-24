@@ -212,6 +212,7 @@ public final class KillRewards {
 			}
 			MatchManager.get(server).addTeamKill(winnerTeam);
 		} else if (killerBot != null && TeamComponent.getTeam(killerBot) == winnerTeam) {
+			killerBot.addKill();
 			MatchManager.get(server).addTeamKill(winnerTeam);
 		}
 
@@ -236,6 +237,12 @@ public final class KillRewards {
 				prog.addAssist();
 				p.sendMessage(Text.literal("+" + g + "g ассист").formatted(Formatting.YELLOW), true);
 			}
+		}
+		for (BotHeroEntity bot : nearbyBots) {
+			if (killerBot != null && bot.getUuid().equals(killerBot.getUuid())) {
+				continue;
+			}
+			bot.addAssist();
 		}
 
 		for (ServerPlayerEntity p : nearbyPlayers) {

@@ -88,16 +88,27 @@ public final class MatchManager {
 		final String heroId;
 		final int level;
 		final int xp;
+		final int botNumber;
+		final int kills;
+		final int deaths;
+		final int assists;
 		int ticksLeft;
 
-		PendingBotRespawn(DotaTeam team, String heroId, int level, int xp, int ticksLeft) {
+		PendingBotRespawn(DotaTeam team, String heroId, int level, int xp, int botNumber,
+				int kills, int deaths, int assists, int ticksLeft) {
 			this.team = team;
 			this.heroId = heroId;
 			this.level = level;
 			this.xp = xp;
+			this.botNumber = botNumber;
+			this.kills = kills;
+			this.deaths = deaths;
+			this.assists = assists;
 			this.ticksLeft = ticksLeft;
 		}
 	}
+
+	private int nextBotNumber = 1;
 
 	private MatchManager() {
 		kills.put(DotaTeam.RADIANT, 0);
@@ -587,6 +598,8 @@ public final class MatchManager {
 		cleanupCreeps(server);
 		pendingBots.clear();
 		botRespawns.clear();
+		nextBotNumber = 1;
+		syncMatchTab(server);
 		phase = Phase.LOBBY;
 		waveNumber = 0;
 		tickCounter = 0;
@@ -714,6 +727,7 @@ public final class MatchManager {
 		tickCounter++;
 		if (server.getTicks() % 20 == 0) {
 			syncPhase(server);
+			syncMatchTab(server);
 		}
 		if (tickCounter >= WAVE_INTERVAL_TICKS) {
 			tickCounter = 0;
@@ -732,12 +746,17 @@ public final class MatchManager {
 		if (team == DotaTeam.NONE) {
 			return;
 		}
+		bot.addDeath();
 		int level = Math.max(1, bot.getHeroLevel());
 		botRespawns.add(new PendingBotRespawn(
 				team,
 				bot.getHeroId(),
 				level,
 				bot.getXp(),
+				bot.getBotNumber(),
+				bot.getKills(),
+				bot.getDeaths(),
+				bot.getAssists(),
 				ProgressionConstants.respawnTicks(level)));
 	}
 
@@ -769,18 +788,82 @@ public final class MatchManager {
 				pending.team == DotaTeam.RADIANT ? -45f : 135f, 0f);
 		bot.setup(pending.team, pending.heroId, BotHeroEntity.midPathToEnemyT2(pending.team));
 		bot.restoreProgress(pending.level, pending.xp);
+		bot.restoreMatchStats(pending.botNumber, pending.kills, pending.deaths, pending.assists);
 		bot.setPersistent();
-		if (!world.spawnEntity(bot)) {
-			broadcast(world.getServer(), Text.literal("Бот не возродился: " + pending.heroId)
-					.formatted(Formatting.RED));
+		world.spawnEntity(bot);
+	}
+
+	public void syncMatchTab(MinecraftServer server) {
+		if (server == null) {
 			return;
 		}
-		HeroDef def = HeroCatalog.get(pending.heroId);
-		String name = def != null ? def.name() : pending.heroId;
-		broadcast(world.getServer(), Text.literal("Бот вернулся: ")
-				.append(pending.team.getDisplayName())
-				.append(Text.literal(" — " + name + " L" + pending.level)
-						.formatted(Formatting.AQUA)));
+		if (phase != Phase.IN_GAME) {
+			ModNetworking.sendMatchTabToAll(server, List.of(), false);
+			return;
+		}
+		ModNetworking.sendMatchTabToAll(server, buildMatchTabRows(server), true);
+	}
+
+	private List<MatchTabRow> buildMatchTabRows(MinecraftServer server) {
+		List<MatchTabRow> rows = new ArrayList<>();
+		HeroManager hm = HeroManager.get(server);
+		ServerWorld world = server.getOverworld();
+
+		for (var e : players.entrySet()) {
+			DotaTeam team = e.getValue();
+			if (team == DotaTeam.NONE) {
+				continue;
+			}
+			ServerPlayerEntity p = server.getPlayerManager().getPlayer(e.getKey());
+			String name = p != null ? p.getGameProfile().getName() : e.getKey().toString().substring(0, 8);
+			HeroProgress prog = hm.getProgress(e.getKey());
+			HeroDef def = hm.getHero(e.getKey());
+			String hero = def != null ? def.name() : "—";
+			int level = prog != null ? prog.getLevel() : 1;
+			int k = prog != null ? prog.getKills() : 0;
+			int d = prog != null ? prog.getDeaths() : 0;
+			int a = prog != null ? prog.getAssists() : 0;
+			int resp = prog != null && prog.isAwaitingRespawn()
+					? (prog.getRespawnTicksLeft() + 19) / 20 : 0;
+			rows.add(new MatchTabRow(team.getId(), resp, name, hero, level, k, d, a, "—"));
+		}
+
+		java.util.Set<Integer> deadBotNums = new java.util.HashSet<>();
+		for (PendingBotRespawn pending : botRespawns) {
+			deadBotNums.add(pending.botNumber);
+			HeroDef def = HeroCatalog.get(pending.heroId);
+			String hero = def != null ? def.name() : pending.heroId;
+			String name = pending.botNumber > 0 ? "Бот" + pending.botNumber : "Бот";
+			int resp = (pending.ticksLeft + 19) / 20;
+			rows.add(new MatchTabRow(pending.team.getId(), resp, name, hero,
+					pending.level, pending.kills, pending.deaths, pending.assists, "—"));
+		}
+
+		if (world != null && layout != null) {
+			Box box = new Box(layout.center()).expand(DotaMap.HALF + 16, 24, DotaMap.HALF + 16);
+			for (BotHeroEntity bot : world.getEntitiesByClass(BotHeroEntity.class, box, BotHeroEntity::isAlive)) {
+				if (deadBotNums.contains(bot.getBotNumber())) {
+					continue;
+				}
+				DotaTeam team = bot.getDotaTeam();
+				if (team == DotaTeam.NONE) {
+					continue;
+				}
+				HeroDef def = HeroCatalog.get(bot.getHeroId());
+				String hero = def != null ? def.name() : bot.getHeroId();
+				rows.add(new MatchTabRow(team.getId(), 0, bot.getTabName(), hero,
+						bot.getHeroLevel(), bot.getKills(), bot.getDeaths(), bot.getAssists(), "—"));
+			}
+		}
+
+		rows.sort((a, b) -> {
+			int tc = a.teamId.compareToIgnoreCase(b.teamId);
+			if (tc != 0) {
+				return tc;
+			}
+			return a.name.compareToIgnoreCase(b.name);
+		});
+		return rows;
 	}
 
 	private void syncPhase(MinecraftServer server) {
@@ -1024,18 +1107,11 @@ public final class MatchManager {
 			bot.refreshPositionAndAngles(base.getX() + 0.5 + ox, y, base.getZ() + 0.5 + oz,
 					botTeam == DotaTeam.RADIANT ? -45f : 135f, 0f);
 			bot.setup(botTeam, heroId, BotHeroEntity.midPathToEnemyT2(botTeam));
+			bot.setBotNumber(nextBotNumber++);
 			bot.setPersistent();
 			if (!world.spawnEntity(bot)) {
-				broadcast(world.getServer(), Text.literal("Бот не заспавнился: " + heroId)
-						.formatted(Formatting.RED));
 				continue;
 			}
-			HeroDef def = HeroCatalog.get(heroId);
-			broadcast(world.getServer(), Text.literal("Бот: ")
-					.append(botTeam.getDisplayName())
-					.append(Text.literal(" — " + (def != null ? def.name() : heroId)
-							+ " @ " + base.getX() + "," + base.getZ())
-							.formatted(Formatting.AQUA)));
 			i++;
 		}
 		pendingBots.clear();

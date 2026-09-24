@@ -152,11 +152,12 @@ public class CreepEntity extends ZombieEntity implements TeamComponent.TeamHolde
 
 	@Override
 	public boolean isPushable() {
-		return false;
+		return true;
 	}
 
 	@Override
 	protected void pushAway(net.minecraft.entity.Entity entity) {
+		CreepSeparation.pushAwayIfCreep(this, entity);
 	}
 
 	@Override
@@ -165,6 +166,7 @@ public class CreepEntity extends ZombieEntity implements TeamComponent.TeamHolde
 		if (this.getWorld().isClient || !this.isAlive()) {
 			return;
 		}
+		CreepSeparation.tick(this);
 		if (this.age % 5 == 0) {
 			refreshNameplate();
 		}

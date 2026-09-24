@@ -5,6 +5,7 @@ import com.minedota.hero.AbilitySlot;
 import com.minedota.hero.HeroManager;
 import com.minedota.hero.HeroProgress;
 import com.minedota.match.MatchManager;
+import com.minedota.match.MatchTabRow;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.PacketByteBuf;
@@ -26,6 +27,7 @@ public final class ModNetworking {
 	public static final Identifier REQUEST_OPEN_SELECT = new Identifier(MineDota.MOD_ID, "request_open_select");
 	public static final Identifier HERO_ATTACK = new Identifier(MineDota.MOD_ID, "hero_attack");
 	public static final Identifier SYNC_PHASE = new Identifier(MineDota.MOD_ID, "sync_phase");
+	public static final Identifier SYNC_MATCH_TAB = new Identifier(MineDota.MOD_ID, "sync_match_tab");
 
 	private ModNetworking() {
 	}
@@ -191,5 +193,30 @@ public final class ModNetworking {
 			buf.writeVarInt(attackSpeed);
 		}
 		ServerPlayNetworking.send(player, SYNC_HERO_STATE, buf);
+	}
+
+	public static void sendMatchTabToAll(MinecraftServer server, java.util.List<MatchTabRow> rows, boolean inGame) {
+		PacketByteBuf buf = writeMatchTab(rows, inGame);
+		for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
+			ServerPlayNetworking.send(p, SYNC_MATCH_TAB, new PacketByteBuf(buf.copy()));
+		}
+	}
+
+	private static PacketByteBuf writeMatchTab(java.util.List<MatchTabRow> rows, boolean inGame) {
+		PacketByteBuf buf = PacketByteBufs.create();
+		buf.writeBoolean(inGame);
+		buf.writeVarInt(rows.size());
+		for (MatchTabRow r : rows) {
+			buf.writeString(r.teamId);
+			buf.writeVarInt(r.respawnSec);
+			buf.writeString(r.name);
+			buf.writeString(r.heroName);
+			buf.writeVarInt(r.level);
+			buf.writeVarInt(r.kills);
+			buf.writeVarInt(r.deaths);
+			buf.writeVarInt(r.assists);
+			buf.writeString(r.items);
+		}
+		return buf;
 	}
 }

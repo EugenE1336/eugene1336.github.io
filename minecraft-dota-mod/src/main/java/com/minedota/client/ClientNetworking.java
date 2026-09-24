@@ -107,6 +107,25 @@ public final class ClientNetworking {
 			client.execute(() -> ClientHeroData.setPhase(phase, seconds, matchSec, waveSec, prep));
 		});
 
+		ClientPlayNetworking.registerGlobalReceiver(ModNetworking.SYNC_MATCH_TAB, (client, handler, buf, responseSender) -> {
+			boolean inGame = buf.readBoolean();
+			int n = buf.readVarInt();
+			java.util.List<com.minedota.match.MatchTabRow> rows = new java.util.ArrayList<>();
+			for (int i = 0; i < n; i++) {
+				String team = buf.readString();
+				int resp = buf.readVarInt();
+				String name = buf.readString();
+				String hero = buf.readString();
+				int level = buf.readVarInt();
+				int k = buf.readVarInt();
+				int d = buf.readVarInt();
+				int a = buf.readVarInt();
+				String items = buf.readString();
+				rows.add(new com.minedota.match.MatchTabRow(team, resp, name, hero, level, k, d, a, items));
+			}
+			client.execute(() -> ClientMatchTab.setRows(rows, inGame));
+		});
+
 		ABILITY_KEYS = new KeyBinding[4];
 		ABILITY_KEYS[0] = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.minedota.ability_q", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_Z, "category.minedota"));

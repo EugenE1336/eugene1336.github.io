@@ -42,6 +42,10 @@ public class BotHeroEntity extends PathAwareEntity implements TeamComponent.Team
 	private int pathIndex;
 	private int level = 1;
 	private int xp;
+	private int botNumber;
+	private int kills;
+	private int deaths;
+	private int assists;
 
 	public BotHeroEntity(EntityType<? extends PathAwareEntity> type, World world) {
 		super(type, world);
@@ -82,6 +86,52 @@ public class BotHeroEntity extends PathAwareEntity implements TeamComponent.Team
 
 	public int getXp() {
 		return xp;
+	}
+
+	public int getBotNumber() {
+		return botNumber;
+	}
+
+	public void setBotNumber(int botNumber) {
+		this.botNumber = Math.max(0, botNumber);
+		refreshName();
+	}
+
+	public int getKills() {
+		return kills;
+	}
+
+	public int getDeaths() {
+		return deaths;
+	}
+
+	public int getAssists() {
+		return assists;
+	}
+
+	public void addKill() {
+		kills++;
+	}
+
+	public void addDeath() {
+		deaths++;
+	}
+
+	public void addAssist() {
+		assists++;
+	}
+
+	public void restoreMatchStats(int number, int k, int d, int a) {
+		this.botNumber = Math.max(0, number);
+		this.kills = Math.max(0, k);
+		this.deaths = Math.max(0, d);
+		this.assists = Math.max(0, a);
+		refreshName();
+	}
+
+	/** Display name for TAB: Бот1, Бот2, … */
+	public String getTabName() {
+		return botNumber > 0 ? "Бот" + botNumber : "Бот";
 	}
 
 	/** Restore level/XP after fountain respawn (keeps kill progression). */
@@ -148,8 +198,9 @@ public class BotHeroEntity extends PathAwareEntity implements TeamComponent.Team
 	private void refreshName() {
 		HeroDef def = HeroCatalog.get(heroId);
 		String name = def != null ? def.name() : heroId;
+		String label = botNumber > 0 ? ("Бот" + botNumber) : "Bot";
 		this.setCustomName(team.getDisplayName().copy()
-				.append(net.minecraft.text.Text.literal(" Bot " + name + " L" + level)));
+				.append(net.minecraft.text.Text.literal(" " + label + " " + name + " L" + level)));
 		this.setCustomNameVisible(true);
 	}
 
@@ -238,6 +289,10 @@ public class BotHeroEntity extends PathAwareEntity implements TeamComponent.Team
 		nbt.putInt("PathIndex", pathIndex);
 		nbt.putInt("BotLevel", level);
 		nbt.putInt("BotXp", xp);
+		nbt.putInt("BotNumber", botNumber);
+		nbt.putInt("BotKills", kills);
+		nbt.putInt("BotDeaths", deaths);
+		nbt.putInt("BotAssists", assists);
 		NbtList list = new NbtList();
 		for (BlockPos p : path) {
 			list.add(NbtLong.of(p.asLong()));
@@ -253,6 +308,10 @@ public class BotHeroEntity extends PathAwareEntity implements TeamComponent.Team
 		pathIndex = nbt.getInt("PathIndex");
 		level = Math.max(1, nbt.contains("BotLevel") ? nbt.getInt("BotLevel") : 1);
 		xp = Math.max(0, nbt.getInt("BotXp"));
+		botNumber = Math.max(0, nbt.getInt("BotNumber"));
+		kills = Math.max(0, nbt.getInt("BotKills"));
+		deaths = Math.max(0, nbt.getInt("BotDeaths"));
+		assists = Math.max(0, nbt.getInt("BotAssists"));
 		path.clear();
 		if (nbt.contains("Path", NbtElement.LIST_TYPE)) {
 			NbtList list = nbt.getList("Path", NbtElement.LONG_TYPE);
