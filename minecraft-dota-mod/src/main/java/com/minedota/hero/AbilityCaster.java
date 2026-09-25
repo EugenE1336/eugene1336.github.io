@@ -57,6 +57,11 @@ public final class AbilityCaster {
 			return castTreeGrab(player, ability, prog, hero, prog.getRank(slot));
 		}
 
+		StrAgiAbilities.CastResult special = StrAgiAbilities.tryCast(player, ability, slot, hero, prog);
+		if (special.handled()) {
+			return special.message();
+		}
+
 		switch (ability.type()) {
 			case AOE_DAMAGE -> aoeDamage(world, player, team, ability, power, false);
 			case AOE_STUN -> aoeDamage(world, player, team, ability, power, true);
@@ -333,7 +338,12 @@ public final class AbilityCaster {
 		world.playSound(null, destX, landY, destZ, SoundEvents.ENTITY_ENDERMAN_TELEPORT, SoundCategory.PLAYERS, 1f, 1.2f);
 		world.spawnParticles(ParticleTypes.PORTAL, destX, landY + 1, destZ, 40, 0.5, 0.5, 0.5, 0.2);
 		if (ab.durationTicks() > 0) {
-			player.addStatusEffect(new StatusEffectInstance(StatusEffects.STRENGTH, ab.durationTicks(), 0));
+			player.addStatusEffect(new StatusEffectInstance(StatusEffects.HASTE, ab.durationTicks(), 1));
+			HeroProgress prog = HeroManager.get(player.getServer()).getProgress(player.getUuid());
+			if (prog != null) {
+				int rank = Math.max(1, prog.getRank(AbilitySlot.W));
+				prog.addAttackSpeedBonus(20 + 20 * rank, ab.durationTicks());
+			}
 		}
 	}
 

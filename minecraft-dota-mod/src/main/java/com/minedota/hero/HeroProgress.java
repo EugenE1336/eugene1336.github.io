@@ -17,6 +17,17 @@ public final class HeroProgress {
 	private int assists;
 	/** Tree Grab: remaining cleave attacks (0 = inactive). */
 	private int treeGrabHitsLeft;
+	private boolean rotOn;
+	private int fleshHeapStacks;
+	private float duelBonusAtk;
+	private int helixHits;
+	private int helixInternalCd;
+	private int momentCourageCd;
+	private int godsStrengthTicks;
+	private float godsStrengthBonus;
+	private int asBonusPoints;
+	private int asBonusTicks;
+	private int counterspellTicks;
 
 	public int getLevel() {
 		return level;
@@ -224,7 +235,91 @@ public final class HeroProgress {
 	}
 
 	public float getMaxHealth(HeroDef def) {
-		return def.maxHealth() + hpGain(def.attribute()) * (level - 1);
+		float hp = def.maxHealth() + hpGain(def.attribute()) * (level - 1);
+		if ("pudge".equals(def.id()) && fleshHeapStacks > 0) {
+			int r = Math.max(1, getRank(AbilitySlot.E));
+			float per = 1.0f + 0.5f * r; // 1.5/2/2.5/3
+			hp += fleshHeapStacks * per;
+		}
+		return hp;
+	}
+
+	public boolean toggleRot() {
+		rotOn = !rotOn;
+		return rotOn;
+	}
+
+	public boolean isRotOn() {
+		return rotOn;
+	}
+
+	public void addFleshHeap(int rank) {
+		fleshHeapStacks++;
+	}
+
+	public int getFleshHeapStacks() {
+		return fleshHeapStacks;
+	}
+
+	public void addDuelBonus(float amount) {
+		duelBonusAtk += amount;
+	}
+
+	public float getDuelBonusAtk() {
+		return duelBonusAtk;
+	}
+
+	/** @return true when Helix should fire */
+	public boolean tickHelixHit(int rank) {
+		if (helixInternalCd > 0) {
+			return false;
+		}
+		helixHits++;
+		int need = Math.max(3, 7 - rank); // 6/5/4/3
+		if (helixHits >= need) {
+			helixHits = 0;
+			helixInternalCd = 6; // 0.3s
+			return true;
+		}
+		return false;
+	}
+
+	public boolean tryMomentOfCourage(int rank) {
+		if (momentCourageCd > 0) {
+			return false;
+		}
+		float chance = 0.15f + 0.10f * rank; // 25→55
+		if (Math.random() >= chance) {
+			return false;
+		}
+		momentCourageCd = (int) ((3.0f - 0.5f * rank) * 20); // 2.5→1
+		return true;
+	}
+
+	public void startGodsStrength(int ticks, float bonusFraction) {
+		godsStrengthTicks = ticks;
+		godsStrengthBonus = bonusFraction;
+	}
+
+	public float getGodsStrengthBonus() {
+		return godsStrengthTicks > 0 ? godsStrengthBonus : 0f;
+	}
+
+	public void addAttackSpeedBonus(int points, int ticks) {
+		asBonusPoints = points;
+		asBonusTicks = ticks;
+	}
+
+	public void armCounterspell(int ticks) {
+		counterspellTicks = ticks;
+	}
+
+	public boolean consumeCounterspell() {
+		if (counterspellTicks <= 0) {
+			return false;
+		}
+		counterspellTicks = 0;
+		return true;
 	}
 
 	/**
@@ -237,6 +332,9 @@ public final class HeroProgress {
 		if (def != null && "tiny".equals(def.id())) {
 			as -= getRank(AbilitySlot.R) * ProgressionConstants.TINY_GROW_AS_PENALTY;
 		}
+		if (asBonusTicks > 0) {
+			as += asBonusPoints;
+		}
 		return Math.max(ProgressionConstants.MIN_ATTACK_SPEED,
 				Math.min(ProgressionConstants.MAX_ATTACK_SPEED, as));
 	}
@@ -247,6 +345,8 @@ public final class HeroProgress {
 			dmg += getRank(AbilitySlot.R) * 5f;
 			dmg += getTreeGrabAttackBonus();
 		}
+		dmg += duelBonusAtk;
+		dmg *= (1f + getGodsStrengthBonus());
 		return dmg;
 	}
 
@@ -255,7 +355,14 @@ public final class HeroProgress {
 		if (def.attribute() == HeroAttribute.AGILITY) {
 			per *= ProgressionConstants.AGI_ARMOR_MULT;
 		}
-		return ProgressionConstants.BASE_ARMOR + per * (level - 1);
+		float armor = ProgressionConstants.BASE_ARMOR + per * (level - 1);
+		if ("pudge".equals(def.id())) {
+			int r = getRank(AbilitySlot.E);
+			if (r > 0) {
+				armor += r; // +1/2/3/4
+			}
+		}
+		return armor;
 	}
 
 	/** Multiplier for ability power/heal. Later: primary from Intellect DotA stats. */
@@ -297,20 +404,25 @@ public final class HeroProgress {
 
 	/**
 	 * Cooldown in ticks at current rank.
-	 * Tiny actives: −1s per ability rank after 1 (min 1s).
+	 * Default: basics −1s/rank, ults −5s/rank (min 1s). Specials per ability id.
 	 */
 	public int effectiveCooldownTicks(AbilityDef base, AbilitySlot slot, HeroDef hero) {
 		int cd = Math.max(0, base.cooldownTicks());
-		if (cd <= 0) {
+		if (cd <= 0 || base.type() == AbilityDef.EffectType.PASSIVE) {
 			return 0;
 		}
 		int rank = getRank(slot);
-		if (rank <= 0) {
-			return cd;
+		if (rank <= 1) {
+			return Math.max(20, cd);
 		}
-		if ("tiny".equals(hero.id()) && base.type() != AbilityDef.EffectType.PASSIVE) {
-			cd -= (rank - 1) * 20;
-		}
+		int extra = rank - 1;
+		cd -= switch (base.id()) {
+			case "healing_ward" -> extra * 80; // −4s
+			case "stifling_dagger" -> extra * 10; // −0.5s
+			case "culling_blade", "dismember", "omnislash", "mana_void", "duel",
+					"gods_strength", "assassinate" -> extra * 100; // −5s
+			default -> extra * 20; // −1s (incl. Tiny)
+		};
 		return Math.max(20, cd);
 	}
 
@@ -332,6 +444,24 @@ public final class HeroProgress {
 		};
 	}
 
+	public void tickCombatFlags() {
+		if (helixInternalCd > 0) {
+			helixInternalCd--;
+		}
+		if (momentCourageCd > 0) {
+			momentCourageCd--;
+		}
+		if (godsStrengthTicks > 0) {
+			godsStrengthTicks--;
+		}
+		if (asBonusTicks > 0) {
+			asBonusTicks--;
+		}
+		if (counterspellTicks > 0) {
+			counterspellTicks--;
+		}
+	}
+
 	public void resetForMatch() {
 		level = 1;
 		xp = 0;
@@ -342,6 +472,17 @@ public final class HeroProgress {
 		kills = 0;
 		deaths = 0;
 		assists = 0;
+		rotOn = false;
+		fleshHeapStacks = 0;
+		duelBonusAtk = 0;
+		helixHits = 0;
+		helixInternalCd = 0;
+		momentCourageCd = 0;
+		godsStrengthTicks = 0;
+		godsStrengthBonus = 0;
+		asBonusPoints = 0;
+		asBonusTicks = 0;
+		counterspellTicks = 0;
 		clearTreeGrab();
 		clearRespawn();
 	}

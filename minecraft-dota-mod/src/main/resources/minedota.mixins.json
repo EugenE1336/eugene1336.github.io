@@ -4,6 +4,7 @@
   "compatibilityLevel": "JAVA_17",
   "mixins": [
     "LivingEntityArmorMixin",
+    "LivingEntityDamageMixin",
     "PlayerKeepInventoryMixin",
     "ProjectileAllyPassMixin",
     "NoHeroKnockbackMixin"

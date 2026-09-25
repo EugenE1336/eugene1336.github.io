@@ -36,6 +36,26 @@ public final class TeamDamage {
 			return true;
 		}
 		// Same team → no damage
-		return a != v;
+		if (a == v) {
+			return false;
+		}
+
+		// PA Blur evasion
+		if (entity instanceof net.minecraft.server.network.ServerPlayerEntity victim) {
+			var hm = com.minedota.hero.HeroManager.get(victim.getServer());
+			var def = hm.getHero(victim.getUuid());
+			var prog = hm.getProgress(victim.getUuid());
+			if (def != null && prog != null && com.minedota.hero.StrAgiAbilities.tryEvade(victim, def, prog)) {
+				victim.getServerWorld().spawnParticles(net.minecraft.particle.ParticleTypes.CLOUD,
+						victim.getX(), victim.getY() + 1, victim.getZ(), 8, 0.3, 0.4, 0.3, 0.02);
+				return false;
+			}
+			// AM Counterspell: block one spell-like hit
+			if (def != null && prog != null && "am".equals(def.id()) && prog.consumeCounterspell()) {
+				livingAtk.damage(victim.getServerWorld().getDamageSources().magic(), amount * 0.5f);
+				return false;
+			}
+		}
+		return true;
 	}
 }

@@ -38,6 +38,17 @@ public final class HeroCombat {
 		ServerLivingEntityEvents.AFTER_DEATH.register(KillRewards::onEntityDeath);
 	}
 
+	/** Called from LivingEntityDamageMixin after a successful hit. */
+	public static void notifyDamaged(ServerPlayerEntity victim, LivingEntity attacker) {
+		HeroManager hm = HeroManager.get(victim.getServer());
+		HeroDef def = hm.getHero(victim.getUuid());
+		HeroProgress prog = hm.getProgress(victim.getUuid());
+		if (def == null || prog == null) {
+			return;
+		}
+		StrAgiAbilities.onDamaged(victim, def, prog, attacker);
+	}
+
 	private static ActionResult onAttack(PlayerEntity player, net.minecraft.world.World world, Hand hand,
 			Entity entity, net.minecraft.util.hit.EntityHitResult hitResult) {
 		if (world.isClient || !(player instanceof ServerPlayerEntity sp)) {
@@ -96,6 +107,7 @@ public final class HeroCombat {
 		}
 
 		float raw = prog.getAttackDamage(def);
+		raw = StrAgiAbilities.modifyOutgoingAttack(sp, def, prog, target, raw);
 		HeroProgress tProg = null;
 		HeroDef tDef = null;
 		if (target instanceof ServerPlayerEntity tp) {
@@ -106,6 +118,8 @@ public final class HeroCombat {
 
 		prog.startAttackCooldown(def);
 		target.damage(sp.getServerWorld().getDamageSources().playerAttack(sp), dmg);
+
+		StrAgiAbilities.onAttackLanded(sp, def, prog, target, dmg);
 
 		ServerWorld sw = sp.getServerWorld();
 		if (prog.hasTreeGrab()) {

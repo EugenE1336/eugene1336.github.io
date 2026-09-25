@@ -172,20 +172,36 @@ public final class HeroManager {
 			return Text.literal(slot.getKey() + " КД: " + (cds[idx] / 20) + "с").formatted(Formatting.GRAY);
 		}
 		String err = AbilityCaster.cast(player, ab, slot, def, prog);
-		if (err != null && !"TREE_GRAB_OK".equals(err) && !"TREE_THROW_OK".equals(err)) {
+		if (err != null && !"TREE_GRAB_OK".equals(err) && !"TREE_THROW_OK".equals(err)
+				&& !"NO_CD".equals(err) && !"CULL_RESET".equals(err)) {
 			return Text.literal(err).formatted(Formatting.RED);
 		}
-		// Grab keeps charges (no CD); throw or normal cast starts CD
-		if (!"TREE_GRAB_OK".equals(err)) {
-			cds[idx] = prog.effectiveCooldownTicks(ab, slot, def);
+		if ("TREE_GRAB_OK".equals(err) || "NO_CD".equals(err)) {
+			syncState(player);
+			return Text.empty();
 		}
+		if ("CULL_RESET".equals(err)) {
+			cds[idx] = 0;
+			syncState(player);
+			player.sendMessage(Text.literal(slot.getKey() + ": " + ab.name() + " (КД сброшен)")
+					.formatted(Formatting.GOLD), true);
+			return Text.empty();
+		}
+		cds[idx] = prog.effectiveCooldownTicks(ab, slot, def);
 		syncState(player);
 		if ("TREE_THROW_OK".equals(err)) {
 			player.sendMessage(Text.literal(slot.getKey() + ": Tree Throw").formatted(Formatting.AQUA), true);
-		} else if (!"TREE_GRAB_OK".equals(err)) {
+		} else {
 			player.sendMessage(Text.literal(slot.getKey() + ": " + ab.name()).formatted(Formatting.AQUA), true);
 		}
 		return Text.empty();
+	}
+
+	/** Zero ability CD (Assassinate kill reset, etc.). */
+	public void clearCooldown(ServerPlayerEntity player, AbilitySlot slot) {
+		int[] cds = cooldowns.computeIfAbsent(player.getUuid(), u -> new int[]{0, 0, 0, 0});
+		cds[slot.getIndex()] = 0;
+		syncState(player);
 	}
 
 	/** Start Tree Grab CD after 5 cleave hits. */
@@ -243,6 +259,7 @@ public final class HeroManager {
 				int beforeAtk = prog.getAttackCooldownTicks();
 				int beforeResp = prog.getRespawnTicksLeft();
 				prog.tickCooldowns();
+				prog.tickCombatFlags();
 				if (prog.getAttackCooldownTicks() != beforeAtk || prog.getRespawnTicksLeft() != beforeResp) {
 					changed = true;
 				}

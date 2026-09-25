@@ -207,6 +207,11 @@ public final class KillRewards {
 			if (kp != null) {
 				kp.addGold(killGold);
 				kp.addKill();
+				HeroDef kd = hm.getHero(killerPlayer.getUuid());
+				if (kd != null) {
+					StrAgiAbilities.onHeroKill(killerPlayer, kd, kp);
+				}
+				AbilityRuntime.clearHungerIfKiller(killerPlayer);
 				killerPlayer.sendMessage(Text.literal("+" + killGold + "g килл (ур." + victimLevel + ")")
 						.formatted(Formatting.GOLD), true);
 			}
